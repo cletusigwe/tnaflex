@@ -1,0 +1,68 @@
+- name: Configure firewalls on our nodes
+  hosts: tnaflex_nodes
+  become: true
+  serial: 1
+
+  vars:
+    libvirt_host_ip: 192.168.122.1
+    webapp_port: "8080"
+
+  tasks:
+    - name: Install UFW
+      ansible.builtin.apt:
+        name: ufw
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Allow SSH from the hypervisor
+      community.general.ufw:
+        rule: allow
+        from_ip: "{{ libvirt_host_ip }}"
+        to_port: "22"
+        proto: tcp
+        comment: Ansible access from hypervisor
+
+    - name: Allow the host reverse proxy to reach webapp Nginx
+      community.general.ufw:
+        rule: allow
+        from_ip: "{{ libvirt_host_ip }}"
+        to_port: "{{ webapp_port }}"
+        proto: tcp
+        comment: Host Nginx reverse proxy
+      when: inventory_hostname == "webapp-node"
+
+    - name: Allow application nodes to reach MySQL
+      community.general.ufw:
+        rule: allow
+        from_ip: "{{ item }}"
+        to_port: "3306"
+        proto: tcp
+        comment: Tnaflex MySQL access
+      loop:
+        - "{{ hostvars['webapp-node'].private_ip }}"
+        - "{{ hostvars['video-preprocessor-node'].private_ip }}"
+      when: inventory_hostname == "database-node"
+
+    - name: Deny incoming traffic by default
+      community.general.ufw:
+        direction: incoming
+        default: deny
+
+    - name: Allow outgoing traffic by default
+      community.general.ufw:
+        direction: outgoing
+        default: allow
+
+    - name: Deny routed traffic by default
+      community.general.ufw:
+        direction: routed
+        default: deny
+
+    - name: Enable low-volume firewall logging
+      community.general.ufw:
+        logging: low
+
+    - name: Enable UFW
+      community.general.ufw:
+        state: enabled

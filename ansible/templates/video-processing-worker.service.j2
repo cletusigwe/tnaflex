@@ -7,13 +7,13 @@ After=network-online.target
 Type=simple
 User={{ deploy_user }}
 Group={{ web_group }}
-WorkingDirectory={{ app_dir }}
+WorkingDirectory={{ app_dir }}/webapp
 
-ExecStart=/usr/bin/php {{ app_dir }}/artisan queue:work {{ queue_name }} --sleep=3 --timeout=0
+ExecStart=/usr/bin/php {{ app_dir }}/webapp/artisan queue:work video_processing --queue={{ queue_name }} --sleep=3 --timeout=0
 
 Restart=always
 RestartSec=5
-TimeoutStopSec={{ queue_stop_timeout }}
+TimeoutStopSec=3900
 KillSignal=SIGTERM
 UMask=0002
 

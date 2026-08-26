@@ -2,49 +2,62 @@
   hosts:
     - webapp-node
     - video-preprocessor-node
-  any-errors-fatal: true
+  any_errors_fatal: true
+
   tasks:
     - name: Pull latest changes from origin/master
       ansible.builtin.shell:
         cmd: git fetch origin master && git reset --hard origin/master && git clean -df
-        chdir: /var/www/webapp
+        chdir: "{{ app_dir }}"
+
+      environment:
+        GIT_SSH_COMMAND: >-
+          ssh -i /home/ubuntu/.ssh/github-deploy-key
+          -o IdentitiesOnly
+          -o StrictHostKeyChecking=accept-new
+          -o UserKnownHostsFile=/home/ubuntu/.ssh/known_hosts
 
     - name: Update Backend dependencies
       ansible.builtin.command:
         cmd: composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader
-        chdir: /var/www/webapp
+        chdir: "{{ app_dir }}/webapp"
 
     - name: Clear cache
       ansible.builtin.command:
         cmd: php artisan optimize:clear
-        chdir: /var/www/webapp
+        chdir: "{{ app_dir }}/webapp"
 
 - name: Update database migration on the webapp node
   hosts:
     - webapp-node
-  any-errors-fatal: true
+  any_errors_fatal: true
+
+  vars:
+    bun_executable: /home/ubuntu/.bun/bin/bun
+
   tasks:
     - name: Update Frontend dependencies
       ansible.builtin.shell:
-        cmd: bun install --frozen-lockfile && bun run build
-        chdir: /var/www/webapp
+        cmd: "{{ bun_executable }} install --frozen-lockfile && {{ bun_executable }} run build"
+        chdir: "{{ app_dir }}/webapp"
 
     - name: Run pending migrations
       ansible.builtin.command:
         cmd: php artisan migrate --force
-        chdir: /var/www/webapp
+        chdir: "{{ app_dir }}/webapp"
 
     - name: Cache Laravel related stuff
       ansible.builtin.command:
         cmd: php artisan optimize
-        chdir: /var/www/webapp
+        chdir: "{{ app_dir }}/webapp"
 
 - name: Restart Video processing queue on video-preprocessor node
   hosts:
     - video-preprocessor-node
-  any-errors-fatal: true
+  any_errors_fatal: true
+
   tasks:
     - name: Restart Laravel queue for preprocessing videos
       ansible.builtin.command:
         cmd: php artisan queue:restart
-        chdir: /var/www/webapp
+        chdir: "{{ app_dir }}/webapp"

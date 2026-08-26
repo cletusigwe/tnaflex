@@ -9,22 +9,42 @@
     ubuntu_checksums: https://cloud-images.ubuntu.com/releases/24.04/release/SHA256SUMS
 
     virtual_machines:
-      - name: webapp-node
-        vcpus: 2
-        memory: 4096
-        disk: 10
-
       - name: database-node
         vcpus: 2
         memory: 4096
         disk: 10
+        mac: "52:54:00:10:00:01"
+        private_ip: "192.168.122.101"
+
+      - name: webapp-node
+        vcpus: 2
+        memory: 4096
+        disk: 10
+        mac: "52:54:00:10:00:02"
+        private_ip: "192.168.122.102"
 
       - name: video-preprocessor-node
         vcpus: 4
         memory: 7168
         disk: 20
+        mac: "52:54:00:10:00:03"
+        private_ip: "192.168.122.103"
 
   tasks:
+    - name: Reserve private addresses for our nodes
+      community.libvirt.virt_net:
+        name: default
+        command: modify
+        xml: >-
+          <host
+            mac='{{ item.mac }}'
+            name='{{ item.name }}'
+            ip='{{ item.private_ip }}'
+          />
+      loop: "{{ virtual_machines }}"
+      loop_control:
+        label: "{{ item.name }}"
+
     - name: Ensure each virtual machine exists
       community.libvirt.virt_cloud_instance:
         name: "{{ item.name }}"
@@ -49,6 +69,8 @@
           - network: default
             model:
               type: virtio
+            mac:
+              address: "{{ item.mac }}"
 
         cloud_init:
           clouduser_ssh_key: /home/azureuser/.ssh/lab_ed25519.pub

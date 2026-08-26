@@ -6,9 +6,8 @@
   vars:
     deploy_user: ubuntu
     deploy_home: /home/ubuntu
-    web-group: www-data
+    web_group: www-data
 
-    app_dir: /var/www/webapp
     repository: "{{ git_repository }}"
     repository_branch: master
 
@@ -35,12 +34,22 @@
         mode: "0600"
       no_log: true
 
+    - name: Create repository directory
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0755"
+
     - name: Clone repository
       ansible.builtin.git:
         repo: "{{ repository }}"
         dest: "{{ app_dir }}"
         version: "{{ repository_branch }}"
         update: true
+      
+      become_user: "{{ deploy_user }}"
 
       environment:
         GIT_SSH_COMMAND: >-
@@ -52,7 +61,7 @@
     - name: Render Laravel environment file
       ansible.builtin.template:
         src: templates/.env.webapp.j2
-        dest: "{{ app_dir }}/.env"
+        dest: "{{ app_dir }}/webapp/.env"
         owner: "{{ deploy_user }}"
         group: "{{ web_group }}"
         mode: "0640"
@@ -60,7 +69,7 @@
 
     - name: Install and initialize application
       become_user: "{{ deploy_user }}"
-      environment: "{{ runtime_environment }}"
+      # environment: "{{ runtime_environment }}"
       block:
         - name: Install PHP dependencies
           ansible.builtin.command:
@@ -71,25 +80,7 @@
               - --prefer-dist
               - --no-dev
               - --optimize-autoloader
-            chdir: "{{ app_dir }}"
-
-        - name: Run database migrations
-          ansible.builtin.command:
-            argv:
-              - php
-              - artisan
-              - migrate
-              - --force
-            chdir: "{{ app_dir }}"
-
-        - name: Create public storage link
-          ansible.builtin.command:
-            argv:
-              - php
-              - artisan
-              - storage:link
-            chdir: "{{ app_dir }}"
-            creates: "{{ app_dir }}/public/storage"
+            chdir: "{{ app_dir }}/webapp"
 
         - name: Cache Laravel configuration and routes
           ansible.builtin.command:
@@ -97,7 +88,7 @@
               - php
               - artisan
               - optimize
-            chdir: "{{ app_dir }}"
+            chdir: "{{ app_dir }}/webapp"
 
     - name: Set ownership of Laravel writable directories
       ansible.builtin.file:
@@ -106,8 +97,8 @@
         group: "{{ web_group }}"
         recurse: true
       loop:
-        - "{{ app_dir }}/storage"
-        - "{{ app_dir }}/bootstrap/cache"
+        - "{{ app_dir }}/webapp/storage"
+        - "{{ app_dir }}/webapp/bootstrap/cache"
 
     - name: Make Laravel runtime directories group-writable
       ansible.builtin.command:
@@ -115,8 +106,8 @@
           - chmod
           - -R
           - ug+rwX
-          - "{{ app_dir }}/storage"
-          - "{{ app_dir }}/bootstrap/cache"
+          - "{{ app_dir }}/webapp/storage"
+          - "{{ app_dir }}/webapp/bootstrap/cache"
 
     - name: Install video processing worker service
       ansible.builtin.template:

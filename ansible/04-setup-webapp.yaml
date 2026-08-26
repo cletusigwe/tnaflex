@@ -7,8 +7,9 @@
     deploy_user: ubuntu
     deploy_home: /home/ubuntu
     web_group: www-data
+    nginx_site_name: tnaflex
+    php_fpm_service: php8.3-fpm
 
-    app_dir: /var/www/webapp
     repository: "{{ git_repository }}"
     repository_branch: master
 
@@ -16,6 +17,12 @@
     github_key_remote: /home/ubuntu/.ssh/github-deploy-key
 
     bun_executable: /home/ubuntu/.bun/bin/bun
+
+  handlers:
+    - name: Reload Nginx
+      ansible.builtin.systemd_service:
+        name: nginx
+        state: reloaded
 
   tasks:
     - name: Create deployment SSH directory
@@ -35,12 +42,21 @@
         mode: "0600"
       no_log: true
 
+    - name: Create repository directory
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0755"
+
     - name: Clone repository
       ansible.builtin.git:
         repo: "{{ repository }}"
         dest: "{{ app_dir }}"
         version: "{{ repository_branch }}"
         update: true
+      become_user: "{{ deploy_user }}"
 
       environment:
         GIT_SSH_COMMAND: >-
@@ -52,7 +68,7 @@
     - name: Render Laravel environment file
       ansible.builtin.template:
         src: templates/.env.webapp.j2
-        dest: "{{ app_dir }}/.env"
+        dest: "{{ app_dir }}/webapp/.env"
         owner: "{{ deploy_user }}"
         group: "{{ web_group }}"
         mode: "0640"
@@ -60,7 +76,6 @@
 
     - name: Install and initialize application
       become_user: "{{ deploy_user }}"
-      environment: "{{ runtime_environment }}"
       block:
         - name: Install PHP dependencies
           ansible.builtin.command:
@@ -71,7 +86,7 @@
               - --prefer-dist
               - --no-dev
               - --optimize-autoloader
-            chdir: "{{ app_dir }}"
+            chdir: "{{ app_dir }}/webapp"
 
         - name: Install frontend dependencies
           ansible.builtin.command:
@@ -79,7 +94,7 @@
               - "{{ bun_executable }}"
               - install
               - --frozen-lockfile
-            chdir: "{{ app_dir }}"
+            chdir: "{{ app_dir }}/webapp"
 
         - name: Build frontend assets
           ansible.builtin.command:
@@ -87,7 +102,7 @@
               - "{{ bun_executable }}"
               - run
               - build
-            chdir: "{{ app_dir }}"
+            chdir: "{{ app_dir }}/webapp"
 
         - name: Clear stale Laravel caches
           ansible.builtin.command:
@@ -95,7 +110,7 @@
               - php
               - artisan
               - optimize:clear
-            chdir: "{{ app_dir }}"
+            chdir: "{{ app_dir }}/webapp"
 
         - name: Run database migrations
           ansible.builtin.command:
@@ -104,7 +119,7 @@
               - artisan
               - migrate
               - --force
-            chdir: "{{ app_dir }}"
+            chdir: "{{ app_dir }}/webapp"
 
         - name: Create public storage link
           ansible.builtin.command:
@@ -112,8 +127,8 @@
               - php
               - artisan
               - storage:link
-            chdir: "{{ app_dir }}"
-            creates: "{{ app_dir }}/public/storage"
+            chdir: "{{ app_dir }}/webapp"
+            creates: "{{ app_dir }}/webapp/public/storage"
 
         - name: Cache Laravel configuration and routes
           ansible.builtin.command:
@@ -121,7 +136,7 @@
               - php
               - artisan
               - optimize
-            chdir: "{{ app_dir }}"
+            chdir: "{{ app_dir }}/webapp"
       
     - name: Set ownership of Laravel writable directories
       ansible.builtin.file:
@@ -130,8 +145,8 @@
         group: "{{ web_group }}"
         recurse: true
       loop:
-        - "{{ app_dir }}/storage"
-        - "{{ app_dir }}/bootstrap/cache"
+        - "{{ app_dir }}/webapp/storage"
+        - "{{ app_dir }}/webapp/bootstrap/cache"
     
     - name: Make Laravel runtime directories group-writable
       ansible.builtin.command:
@@ -139,6 +154,43 @@
           - chmod
           - -R
           - ug+rwX
-          - "{{ app_dir }}/storage"
-          - "{{ app_dir }}/bootstrap/cache"
+          - "{{ app_dir }}/webapp/storage"
+          - "{{ app_dir }}/webapp/bootstrap/cache"
 
+    - name: Copy webapp Nginx configuration
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../nginx/webapp-node.nginx.conf"
+        dest: "/etc/nginx/sites-available/{{ nginx_site_name }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload Nginx
+
+    - name: Enable webapp Nginx configuration
+      ansible.builtin.file:
+        src: "/etc/nginx/sites-available/{{ nginx_site_name }}"
+        dest: "/etc/nginx/sites-enabled/{{ nginx_site_name }}"
+        state: link
+      notify: Reload Nginx
+
+    - name: Disable default Nginx configuration
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Reload Nginx
+
+    - name: Validate Nginx configuration
+      ansible.builtin.command:
+        argv:
+          - nginx
+          - -t
+      changed_when: false
+
+    - name: Ensure PHP-FPM and Nginx are enabled and running
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop:
+        - "{{ php_fpm_service }}"
+        - nginx

@@ -1,6 +1,6 @@
 database_name: tnaflex
 database_user: tnaflex
-database_host: "{{ hostvars['database-node'].ansible_host }}"
+database_host: "{{ hostvars['database-node'].private_ip }}"
 database_password: "{{ vault_database_password }}"
 
 r2_access_key: "{{ vault_r2_access_key }}"
@@ -10,4 +10,8 @@ r2_public_url: "{{ vault_r2_public_url }}"
 
 git_repository: git@github.com:cletusigwe/tnaflex.git
 
-video_processing_queue_name: video_processing
+video_processing_queue_name: video-processing
+
+app_url: "https://tnaflex.cletusigwe.com"
+app_key: "{{ vault_app_key }}"
+app_dir: "/var/www/tnaflex"

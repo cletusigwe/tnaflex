@@ -2,14 +2,17 @@ all:
   children:
     tnaflex_nodes:
       hosts:
-        webapp-node:
-          ansible_host: webapp-node
-
         database-node:
           ansible_host: database-node
+          private_ip: 192.168.122.101
+
+        webapp-node:
+          ansible_host: webapp-node
+          private_ip: 192.168.122.102
 
         video-preprocessor-node:
           ansible_host: video-preprocessor-node
+          private_ip: 192.168.122.103
 
       vars:
         ansible_user: ubuntu

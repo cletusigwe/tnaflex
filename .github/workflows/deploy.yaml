@@ -9,19 +9,19 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
-  steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    - name: Set up SSH
-      uses: webfactory/ssh-agent@v0.8.0
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.8.0
 
-      with:
-        ssh-private-key: ${{ secrets.HOST_SSH_KEY }}
+        with:
+          ssh-private-key: ${{ secrets.HOST_SSH_KEY }}
 
-    - name: Alert host of new changes by running the deploy ansible playbook
-      run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.HOST_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-          set -x
-          ansible -i ansible/inventory.yaml ansible/05-deploy-on-push.yaml
-          EOF
+      - name: Alert host of new changes by running the deploy ansible playbook
+        run: |
+            ssh -o StrictHostKeyChecking=no ${{ secrets.HOST_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+            set -x
+            ansible-playbook -i ${{ secrets.HOST_PROJECT_DIR }}/ansible/inventory.yaml ${{ secrets.HOST_PROJECT_DIR }}/ansible/07-deploy-on-push.yaml
+            EOF

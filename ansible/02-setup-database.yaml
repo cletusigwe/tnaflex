@@ -2,6 +2,12 @@
   hosts: database-node
   become: true
 
+  handlers:
+    - name: Restart MySQL
+      ansible.builtin.systemd_service:
+        name: mysql
+        state: restarted
+
   tasks:
     - name: Install MySQL
       ansible.builtin.apt:
@@ -10,6 +16,14 @@
           - python3-pymysql
         state: present
         update_cache: true
+
+    - name: Make MySQL listen on the private database address
+      ansible.builtin.lineinfile:
+        path: /etc/mysql/mysql.conf.d/mysqld.cnf
+        regexp: '^\s*bind-address\s*='
+        line: "bind-address = {{ database_host }}"
+        insertafter: '^\[mysqld\]'
+      notify: Restart MySQL
 
     - name: Ensure MySQL is enabled and running
       ansible.builtin.systemd_service:
@@ -27,7 +41,11 @@
       ansible.mysql.mysql_user:
         name: "{{ database_user }}"
         password: "{{ database_password }}"
-        host: "{{ database_host }}"
+        host: "{{ item }}"
         priv: "{{ database_name }}.*:ALL"
         state: present
         login_unix_socket: /run/mysqld/mysqld.sock
+
+      loop:
+        - "{{ hostvars['webapp-node'].private_ip }}"
+        - "{{ hostvars['video-preprocessor-node'].private_ip }}"

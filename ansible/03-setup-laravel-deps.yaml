@@ -28,6 +28,16 @@
         update_cache: true
         cache_valid_time: 3600
 
+    - name: Install Nginx and php-fpm on webapp-node
+      ansible.builtin.apt:
+        name:
+          - nginx
+          - php-fpm
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      when: inventory_hostname == "webapp-node"
+
     - name: Install ffmpeg on video-preprocessor node
       ansible.builtin.apt:
         name:
