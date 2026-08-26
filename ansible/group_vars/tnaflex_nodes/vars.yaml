@@ -1,0 +1,13 @@
+database_name: tnaflex
+database_user: tnaflex
+database_host: "{{ hostvars['database-node'].ansible_host }}"
+database_password: "{{ vault_database_password }}"
+
+r2_access_key: "{{ vault_r2_access_key }}"
+r2_secret: "{{ vault_r2_secret }}"
+r2_endpoint: "{{ vault_r2_endpoint }}"
+r2_public_url: "{{ vault_r2_public_url }}"
+
+git_repository: git@github.com:cletusigwe/tnaflex.git
+
+video_processing_queue_name: video_processing

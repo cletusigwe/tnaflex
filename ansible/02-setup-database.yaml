@@ -1,0 +1,33 @@
+- name: Provision Tnaflex database
+  hosts: database-node
+  become: true
+
+  tasks:
+    - name: Install MySQL
+      ansible.builtin.apt:
+        name:
+          - mysql-server
+          - python3-pymysql
+        state: present
+        update_cache: true
+
+    - name: Ensure MySQL is enabled and running
+      ansible.builtin.systemd_service:
+        name: mysql
+        state: started
+        enabled: true
+
+    - name: Create application database
+      ansible.mysql.mysql_db:
+        name: "{{ database_name }}"
+        state: present
+        login_unix_socket: /run/mysqld/mysqld.sock
+
+    - name: Create application users for permitted nodes
+      ansible.mysql.mysql_user:
+        name: "{{ database_user }}"
+        password: "{{ database_password }}"
+        host: "{{ database_host }}"
+        priv: "{{ database_name }}.*:ALL"
+        state: present
+        login_unix_socket: /run/mysqld/mysqld.sock

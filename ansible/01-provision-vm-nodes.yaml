@@ -1,0 +1,69 @@
+- name: Provision Tnaflex virtual machines
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: false
+
+  vars:
+    ubuntu_image: https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img
+    ubuntu_checksums: https://cloud-images.ubuntu.com/releases/24.04/release/SHA256SUMS
+
+    virtual_machines:
+      - name: webapp-node
+        vcpus: 2
+        memory: 4096
+        disk: 10
+
+      - name: database-node
+        vcpus: 2
+        memory: 4096
+        disk: 10
+
+      - name: video-preprocessor-node
+        vcpus: 4
+        memory: 7168
+        disk: 20
+
+  tasks:
+    - name: Ensure each virtual machine exists
+      community.libvirt.virt_cloud_instance:
+        name: "{{ item.name }}"
+
+        base_image: "{{ ubuntu_image }}"
+        image_cache_dir: /var/lib/libvirt/cloud-images
+        image_checksum: "sha256:{{ ubuntu_checksums }}"
+
+        memory: "{{ item.memory }}"
+        vcpus: "{{ item.vcpus }}"
+
+        disks:
+          - path: "/var/lib/libvirt/images/{{ item.name }}.qcow2"
+            size: "{{ item.disk }}"
+            format: qcow2
+            bus: virtio
+
+        osinfo:
+          name: ubuntu24.04
+
+        networks:
+          - network: default
+            model:
+              type: virtio
+
+        cloud_init:
+          clouduser_ssh_key: /home/azureuser/.ssh/lab_ed25519.pub
+          disable: true
+          meta_data: |
+            instance-id: iid-{{ item.name }}
+            local-hostname: {{ item.name }}
+
+        graphics:
+          type: none
+
+        wait_for_cloud_init_reboot: false
+        autostart: true
+        state: present
+
+      loop: "{{ virtual_machines }}"
+      loop_control:
+        label: "{{ item.name }}"

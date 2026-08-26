@@ -1,0 +1,24 @@
+[Unit]
+Description=Laravel video processing queue worker
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User={{ deploy_user }}
+Group={{ web_group }}
+WorkingDirectory={{ app_dir }}
+
+ExecStart=/usr/bin/php {{ app_dir }}/artisan queue:work {{ queue_name }} --sleep=3 --timeout=0
+
+Restart=always
+RestartSec=5
+TimeoutStopSec={{ queue_stop_timeout }}
+KillSignal=SIGTERM
+UMask=0002
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

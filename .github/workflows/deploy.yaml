@@ -1,0 +1,27 @@
+name: Alert host of new changes so it deploys to webapp and video processing nodes.
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+  steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up SSH
+      uses: webfactory/ssh-agent@v0.8.0
+
+      with:
+        ssh-private-key: ${{ secrets.HOST_SSH_KEY }}
+
+    - name: Alert host of new changes by running the deploy ansible playbook
+      run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.HOST_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+          set -x
+          ansible -i ansible/inventory.yaml ansible/05-deploy-on-push.yaml
+          EOF

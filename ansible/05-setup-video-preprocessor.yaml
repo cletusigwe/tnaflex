@@ -1,0 +1,135 @@
+- name: Setup video-preprocessor after node is provisioned
+  hosts: video-preprocessor-node
+  become: true
+  gather_facts: false
+
+  vars:
+    deploy_user: ubuntu
+    deploy_home: /home/ubuntu
+    web-group: www-data
+
+    app_dir: /var/www/webapp
+    repository: "{{ git_repository }}"
+    repository_branch: master
+
+    github_key_local: /home/azureuser/.ssh/github-deploy-key
+    github_key_remote: /home/ubuntu/.ssh/github-deploy-key
+
+    queue_name: "{{video_processing_queue_name}}"
+
+  tasks:
+    - name: Create deployment SSH directory
+      ansible.builtin.file:
+        state: directory
+        path: "{{ deploy_home }}/.ssh"
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0700"
+
+    - name: Copy GitHub deploy key
+      ansible.builtin.copy:
+        src: "{{ github_key_local }}"
+        dest: "{{ github_key_remote }}"
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0600"
+      no_log: true
+
+    - name: Clone repository
+      ansible.builtin.git:
+        repo: "{{ repository }}"
+        dest: "{{ app_dir }}"
+        version: "{{ repository_branch }}"
+        update: true
+
+      environment:
+        GIT_SSH_COMMAND: >-
+          ssh -i {{ github_key_remote }}
+          -o IdentitiesOnly
+          -o StrictHostKeyChecking=accept-new
+          -o UserKnownHostsFile={{ deploy_home }}/.ssh/known_hosts
+
+    - name: Render Laravel environment file
+      ansible.builtin.template:
+        src: templates/.env.webapp.j2
+        dest: "{{ app_dir }}/.env"
+        owner: "{{ deploy_user }}"
+        group: "{{ web_group }}"
+        mode: "0640"
+      no_log: true
+
+    - name: Install and initialize application
+      become_user: "{{ deploy_user }}"
+      environment: "{{ runtime_environment }}"
+      block:
+        - name: Install PHP dependencies
+          ansible.builtin.command:
+            argv:
+              - composer
+              - install
+              - --no-interaction
+              - --prefer-dist
+              - --no-dev
+              - --optimize-autoloader
+            chdir: "{{ app_dir }}"
+
+        - name: Run database migrations
+          ansible.builtin.command:
+            argv:
+              - php
+              - artisan
+              - migrate
+              - --force
+            chdir: "{{ app_dir }}"
+
+        - name: Create public storage link
+          ansible.builtin.command:
+            argv:
+              - php
+              - artisan
+              - storage:link
+            chdir: "{{ app_dir }}"
+            creates: "{{ app_dir }}/public/storage"
+
+        - name: Cache Laravel configuration and routes
+          ansible.builtin.command:
+            argv:
+              - php
+              - artisan
+              - optimize
+            chdir: "{{ app_dir }}"
+
+    - name: Set ownership of Laravel writable directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: "{{ deploy_user }}"
+        group: "{{ web_group }}"
+        recurse: true
+      loop:
+        - "{{ app_dir }}/storage"
+        - "{{ app_dir }}/bootstrap/cache"
+
+    - name: Make Laravel runtime directories group-writable
+      ansible.builtin.command:
+        argv:
+          - chmod
+          - -R
+          - ug+rwX
+          - "{{ app_dir }}/storage"
+          - "{{ app_dir }}/bootstrap/cache"
+
+    - name: Install video processing worker service
+      ansible.builtin.template:
+        src: templates/video-processing-worker.service.j2
+        dest: /etc/systemd/system/video-processing-worker.service
+        owner: root
+        group: root
+        mode: "0644"
+      register: worker_service_file
+
+    - name: Enable and start video processing worker
+      ansible.builtin.systemd_service:
+        name: video-processing-worker.service
+        enabled: true
+        daemon_reload: true
+        state: "{{ 'restarted' if worker_service_file.changed else 'started' }}"

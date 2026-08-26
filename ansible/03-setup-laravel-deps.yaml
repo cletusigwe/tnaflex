@@ -1,0 +1,53 @@
+- name: Install packages like git, composer and bun
+  hosts:
+    - webapp-node
+    - video-preprocessor-node
+  become: true
+  gather_facts: false
+
+  vars:
+    deploy_user: ubuntu
+    deploy_home: /home/ubuntu
+    bun_executable: /home/ubuntu/.bun/bin/bun
+
+  tasks:
+    - name: Install PHP, Composer and supporting packages
+      ansible.builtin.apt:
+        name:
+          - git
+          - curl
+          - unzip
+          - composer
+          - php-cli
+          - php-curl
+          - php-mbstring
+          - php-mysql
+          - php-xml
+          - php-zip
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install ffmpeg on video-preprocessor node
+      ansible.builtin.apt:
+        name:
+          - ffmpeg
+        state: present
+      when: inventory_hostname == "video-preprocessor-node"
+
+    - name: Download Bun installer
+      ansible.builtin.get_url:
+        url: https://bun.com/install
+        dest: /tmp/install-bun.sh
+        mode: "0755"
+
+    - name: Install Bun
+      become_user: "{{ deploy_user }}"
+      ansible.builtin.command:
+        argv:
+          - bash
+          - /tmp/install-bun.sh
+        creates: "{{ bun_executable }}"
+      environment:
+        HOME: "{{ deploy_home }}"
+        BUN_INSTALL: "{{ deploy_home }}/.bun"
