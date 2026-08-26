@@ -45,6 +45,14 @@
       loop_control:
         label: "{{ item.name }}"
 
+    - name: Ensure the cloud image cache exists
+      ansible.builtin.file:
+        path: /var/lib/libvirt/cloud-images
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
     - name: Ensure each virtual machine exists
       community.libvirt.virt_cloud_instance:
         name: "{{ item.name }}"
