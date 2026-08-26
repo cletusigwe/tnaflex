@@ -1,4 +1,7 @@
 collections:
-  - community.libvirt
-  - ansible.mysql
-  - community.general
+  - name: ansible.mysql
+    version: "5.2.0"
+  - name: community.general
+    version: "13.3.0"
+  - name: community.libvirt
+    version: "2.3.0"
