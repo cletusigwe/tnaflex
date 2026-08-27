@@ -29,5 +29,7 @@ jobs:
             chmod 600 "$vault_file"
             printf '%s' "$VAULT_PASSWORD" > "$vault_file"
 
+            cat $vault_file
+
             ansible-playbook -i ${{ secrets.HOST_PROJECT_DIR }}/ansible/inventory.yaml ${{ secrets.HOST_PROJECT_DIR }}/ansible/07-deploy-on-push.yaml --vault-id playground@$vault_file
             EOF
