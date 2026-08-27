@@ -9,9 +9,34 @@
   vars:
     deploy_user: ubuntu
     deploy_home: /home/ubuntu
+    php_version: "8.5"
     bun_executable: /home/ubuntu/.bun/bin/bun
 
   tasks:
+    - name: Install PHP repository prerequisites
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - python3-debian
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Add PHP repository
+      ansible.builtin.deb822_repository:
+        name: ondrej-php
+        types:
+          - deb
+        uris:
+          - https://ppa.launchpadcontent.net/ondrej/php/ubuntu
+        suites:
+          - noble
+        components:
+          - main
+        signed_by: >-
+          https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xB8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6
+        state: present
+
     - name: Install PHP, Composer and supporting packages
       ansible.builtin.apt:
         name:
@@ -19,21 +44,27 @@
           - curl
           - unzip
           - composer
-          - php-cli
-          - php-curl
-          - php-mbstring
-          - php-mysql
-          - php-xml
-          - php-zip
+          - "php{{ php_version }}-cli"
+          - "php{{ php_version }}-curl"
+          - "php{{ php_version }}-mbstring"
+          - "php{{ php_version }}-mysql"
+          - "php{{ php_version }}-xml"
+          - "php{{ php_version }}-zip"
         state: present
         update_cache: true
         cache_valid_time: 3600
 
-    - name: Install Nginx and php-fpm on webapp-node
+    - name: Select PHP 8.5 as the default CLI
+      community.general.alternatives:
+        name: php
+        path: "/usr/bin/php{{ php_version }}"
+
+    - name: Install Nginx and PHP-FPM on webapp-node
       ansible.builtin.apt:
         name:
           - nginx
-          - php-fpm
+          - "php{{ php_version }}-fpm"
+          - "php{{ php_version }}-opcache"
         state: present
         update_cache: true
         cache_valid_time: 3600

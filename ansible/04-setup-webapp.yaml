@@ -8,7 +8,7 @@
     deploy_home: /home/ubuntu
     web_group: www-data
     nginx_site_name: tnaflex
-    php_fpm_service: php8.3-fpm
+    php_fpm_service: php8.5-fpm
 
     repository: "{{ git_repository }}"
     repository_branch: master

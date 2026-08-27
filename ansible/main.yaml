@@ -1,0 +1,6 @@
+- ansible.builtin.import_playbook: 01-provision-vm-nodes.yaml
+- ansible.builtin.import_playbook: 02-setup-database.yaml
+- ansible.builtin.import_playbook: 03-setup-laravel-deps.yaml
+- ansible.builtin.import_playbook: 04-setup-webapp.yaml
+- ansible.builtin.import_playbook: 05-setup-video-preprocessor.yaml
+- ansible.builtin.import_playbook: 06-setup-firewalls.yaml
