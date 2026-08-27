@@ -10,6 +10,8 @@
     deploy_user: ubuntu
     deploy_home: /home/ubuntu
     php_version: "8.5"
+    composer_version: "2.10.3"
+    composer_checksum: 7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6
     bun_executable: /home/ubuntu/.bun/bin/bun
 
   tasks:
@@ -41,13 +43,12 @@
       ansible.builtin.apt:
         update_cache: true
 
-    - name: Install PHP, Composer and supporting packages
+    - name: Install PHP and supporting packages
       ansible.builtin.apt:
         name:
           - git
           - curl
           - unzip
-          - composer
           - "php{{ php_version }}-cli"
           - "php{{ php_version }}-curl"
           - "php{{ php_version }}-mbstring"
@@ -62,6 +63,20 @@
       community.general.alternatives:
         name: php
         path: "/usr/bin/php{{ php_version }}"
+
+    - name: Remove the Ubuntu Composer package
+      ansible.builtin.apt:
+        name: composer
+        state: absent
+
+    - name: Install Composer
+      ansible.builtin.get_url:
+        url: "https://getcomposer.org/download/{{ composer_version }}/composer.phar"
+        dest: /usr/local/bin/composer
+        checksum: "sha256:{{ composer_checksum }}"
+        owner: root
+        group: root
+        mode: "0755"
 
     - name: Install Nginx and PHP-FPM on webapp-node
       ansible.builtin.apt:
