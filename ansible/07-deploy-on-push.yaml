@@ -13,7 +13,7 @@
       environment:
         GIT_SSH_COMMAND: >-
           ssh -i /home/ubuntu/.ssh/github-deploy-key
-          -o IdentitiesOnly
+          -o IdentitiesOnly=yes
           -o StrictHostKeyChecking=accept-new
           -o UserKnownHostsFile=/home/ubuntu/.ssh/known_hosts
 
