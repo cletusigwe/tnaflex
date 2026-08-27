@@ -22,12 +22,16 @@ jobs:
       - name: Alert host of new changes by running the deploy ansible playbook
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.HOST_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-          set -x
+          set -eu
 
           vault_file="$(mktemp)"
           trap 'rm -f "$vault_file"' EXIT
           chmod 600 "$vault_file"
           printf '%s' "${{ secrets.VAULT_PASSWORD }}" > "$vault_file"
 
-          ansible-playbook -i ${{ secrets.HOST_PROJECT_DIR }}/ansible/inventory.yaml ${{ secrets.HOST_PROJECT_DIR }}/ansible/07-deploy-on-push.yaml --vault-id playground@$vault_file
+          GIT_SSH_COMMAND='ssh -i /home/azureuser/.ssh/github-deploy-key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/home/azureuser/.ssh/known_hosts' \
+            git -C ${{ secrets.HOST_PROJECT_DIR }} fetch origin master
+          git -C ${{ secrets.HOST_PROJECT_DIR }} reset --hard origin/master
+
+          ansible-playbook -i ${{ secrets.HOST_PROJECT_DIR }}/ansible/inventory.yaml ${{ secrets.HOST_PROJECT_DIR }}/ansible/08-deploy-on-push.yaml --vault-id playground@$vault_file
           EOF

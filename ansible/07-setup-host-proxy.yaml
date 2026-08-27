@@ -1,0 +1,102 @@
+- name: Configure the host reverse proxy and HTTPS
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: false
+
+  vars:
+    certificate_domain: tnaflex.cletusigwe.com
+    certificate_path: "/etc/letsencrypt/live/{{ certificate_domain }}/fullchain.pem"
+    nginx_site_name: tnaflex
+
+  tasks:
+    - name: Install Nginx and Certbot
+      ansible.builtin.apt:
+        name:
+          - nginx
+          - certbot
+          - python3-certbot-nginx
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Check whether the certificate already exists
+      ansible.builtin.stat:
+        path: "{{ certificate_path }}"
+      register: certificate
+
+    - name: Require a Let's Encrypt account email for the first certificate
+      ansible.builtin.assert:
+        that:
+          - certbot_email | length > 0
+        fail_msg: Add vault_certbot_email to ansible/group_vars/all/vault.yaml.
+      when: not certificate.stat.exists
+
+    - name: Install the HTTP reverse proxy before first issuance
+      ansible.builtin.copy:
+        src: ../nginx/host.nginx.conf
+        dest: "/etc/nginx/sites-available/{{ nginx_site_name }}"
+        owner: root
+        group: root
+        mode: "0644"
+      when: not certificate.stat.exists
+      notify: Reload host Nginx
+
+    - name: Enable the Tnaflex site
+      ansible.builtin.file:
+        src: "/etc/nginx/sites-available/{{ nginx_site_name }}"
+        dest: "/etc/nginx/sites-enabled/{{ nginx_site_name }}"
+        state: link
+      notify: Reload host Nginx
+
+    - name: Disable the default Nginx site
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Reload host Nginx
+
+    - name: Validate the active Nginx configuration
+      ansible.builtin.command: nginx -t
+      changed_when: false
+
+    - name: Ensure Nginx is running
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+
+    - name: Apply the HTTP Nginx configuration
+      ansible.builtin.meta: flush_handlers
+
+    - name: Obtain and install the Let's Encrypt certificate
+      ansible.builtin.command:
+        argv:
+          - certbot
+          - --nginx
+          - --non-interactive
+          - --agree-tos
+          - --redirect
+          - --email
+          - "{{ certbot_email }}"
+          - --cert-name
+          - "{{ certificate_domain }}"
+          - --domain
+          - "{{ certificate_domain }}"
+        creates: "{{ certificate_path }}"
+      when: not certificate.stat.exists
+
+    - name: Validate the Certbot-managed Nginx configuration
+      ansible.builtin.command: nginx -t
+      changed_when: false
+
+    - name: Enable automatic certificate renewal
+      ansible.builtin.service:
+        name: certbot.timer
+        state: started
+        enabled: true
+
+  handlers:
+    - name: Reload host Nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded

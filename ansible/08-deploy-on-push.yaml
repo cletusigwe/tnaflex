@@ -1,3 +1,4 @@
+---
 - name: Deploy new changes to the webapp and video-processing nodes
   hosts:
     - webapp-node
