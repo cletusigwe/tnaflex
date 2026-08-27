@@ -4,6 +4,7 @@
     - video-preprocessor-node
   become: true
   gather_facts: false
+  serial: 1
 
   vars:
     deploy_user: ubuntu
