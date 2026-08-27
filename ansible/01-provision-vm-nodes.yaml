@@ -24,7 +24,7 @@
         private_ip: "192.168.122.102"
 
       - name: video-preprocessor-node
-        vcpus: 4
+        vcpus: 2
         memory: 7168
         disk: 20
         mac: "52:54:00:10:00:03"
