@@ -21,15 +21,13 @@ jobs:
 
       - name: Alert host of new changes by running the deploy ansible playbook
         run: |
-            ssh -o StrictHostKeyChecking=no ${{ secrets.HOST_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-            set -x
-          
-            vault_file="$(mktemp)"
-            trap 'rm -f "$vault_file"' EXIT
-            chmod 600 "$vault_file"
-            printf '%s' "$VAULT_PASSWORD" > "$vault_file"
+          ssh -o StrictHostKeyChecking=no ${{ secrets.HOST_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+          set -x
 
-            cat $vault_file
+          vault_file="$(mktemp)"
+          trap 'rm -f "$vault_file"' EXIT
+          chmod 600 "$vault_file"
+          printf '%s' "${{ secrets.VAULT_PASSWORD }}" > "$vault_file"
 
-            ansible-playbook -i ${{ secrets.HOST_PROJECT_DIR }}/ansible/inventory.yaml ${{ secrets.HOST_PROJECT_DIR }}/ansible/07-deploy-on-push.yaml --vault-id playground@$vault_file
-            EOF
+          ansible-playbook -i ${{ secrets.HOST_PROJECT_DIR }}/ansible/inventory.yaml ${{ secrets.HOST_PROJECT_DIR }}/ansible/07-deploy-on-push.yaml --vault-id playground@$vault_file
+          EOF
