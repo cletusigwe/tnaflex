@@ -104,12 +104,12 @@
               - build
             chdir: "{{ app_dir }}/webapp"
 
-        - name: Clear stale Laravel caches
+        - name: Clear cached Laravel configuration
           ansible.builtin.command:
             argv:
               - php
               - artisan
-              - optimize:clear
+              - config:clear
             chdir: "{{ app_dir }}/webapp"
 
         - name: Run database migrations
@@ -119,6 +119,14 @@
               - artisan
               - migrate
               - --force
+            chdir: "{{ app_dir }}/webapp"
+
+        - name: Clear stale Laravel caches
+          ansible.builtin.command:
+            argv:
+              - php
+              - artisan
+              - optimize:clear
             chdir: "{{ app_dir }}/webapp"
 
         - name: Create public storage link
