@@ -68,7 +68,6 @@
         name:
           - nginx
           - "php{{ php_version }}-fpm"
-          - "php{{ php_version }}-opcache"
         state: present
         update_cache: true
         cache_valid_time: 3600
