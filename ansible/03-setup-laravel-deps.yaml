@@ -37,6 +37,10 @@
           https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xB8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6
         state: present
 
+    - name: Refresh package index after adding PHP repository
+      ansible.builtin.apt:
+        update_cache: true
+
     - name: Install PHP, Composer and supporting packages
       ansible.builtin.apt:
         name:
