@@ -34,14 +34,7 @@ class RegisterRequest extends FormRequest
                 'alpha_dash:ascii',
                 Rule::unique(User::class),
             ],
-            'email' => [
-                'required',
-                'string',
-                'email',
-                'max:255',
-                Rule::unique(User::class),
-            ],
-            'password' => ['required', 'string', Password::min(8)],
+            'password' => ['required', 'string', 'confirmed', Password::min(8)],
         ];
     }
 
@@ -49,7 +42,6 @@ class RegisterRequest extends FormRequest
     {
         $this->merge([
             'username' => $this->string('username')->trim()->lower()->toString(),
-            'email' => $this->string('email')->trim()->lower()->toString(),
         ]);
     }
 }

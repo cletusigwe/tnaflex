@@ -10,15 +10,15 @@ import { login } from '@/routes';
 
 export default function Register() {
     const form = useForm({
-        email: '',
         username: '',
         password: '',
+        password_confirmation: '',
     });
 
     const submit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         form.post(RegisteredUserController.store().url, {
-            onFinish: () => form.reset('password'),
+            onFinish: () => form.reset('password', 'password_confirmation'),
         });
     };
 
@@ -30,29 +30,6 @@ export default function Register() {
             <Head title="Create an account" />
 
             <form onSubmit={submit} className="space-y-6">
-                <div>
-                    <label
-                        htmlFor="email"
-                        className="mb-2 block text-xs font-semibold tracking-[0.08em] uppercase"
-                    >
-                        Email
-                    </label>
-                    <Input
-                        id="email"
-                        name="email"
-                        type="email"
-                        value={form.data.email}
-                        onChange={(event) =>
-                            form.setData('email', event.target.value)
-                        }
-                        autoComplete="email"
-                        autoFocus
-                        required
-                        className="border-neutral-400 bg-white focus-visible:ring-offset-[#f7f7f5]"
-                    />
-                    <FormError message={form.errors.email} />
-                </div>
-
                 <div>
                     <label
                         htmlFor="username"
@@ -68,6 +45,7 @@ export default function Register() {
                             form.setData('username', event.target.value)
                         }
                         autoComplete="username"
+                        autoFocus
                         required
                         className="border-neutral-400 bg-white focus-visible:ring-offset-[#f7f7f5]"
                     />
@@ -95,6 +73,32 @@ export default function Register() {
                         className="border-neutral-400 bg-white focus-visible:ring-offset-[#f7f7f5]"
                     />
                     <FormError message={form.errors.password} />
+                </div>
+
+                <div>
+                    <label
+                        htmlFor="password_confirmation"
+                        className="mb-2 block text-xs font-semibold tracking-[0.08em] uppercase"
+                    >
+                        Confirm password
+                    </label>
+                    <Input
+                        id="password_confirmation"
+                        name="password_confirmation"
+                        type="password"
+                        value={form.data.password_confirmation}
+                        onChange={(event) =>
+                            form.setData(
+                                'password_confirmation',
+                                event.target.value,
+                            )
+                        }
+                        autoComplete="new-password"
+                        minLength={8}
+                        required
+                        className="border-neutral-400 bg-white focus-visible:ring-offset-[#f7f7f5]"
+                    />
+                    <FormError message={form.errors.password_confirmation} />
                 </div>
 
                 <Button

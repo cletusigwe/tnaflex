@@ -23,20 +23,32 @@ class AuthenticationTest extends TestCase
             ->assertInertia(fn (Assert $page): Assert => $page->component('auth/register'));
     }
 
-    public function test_guest_can_register_with_email_username_and_password(): void
+    public function test_guest_can_register_with_username_and_password(): void
     {
         $response = $this->post(route('register.store'), [
-            'email' => 'JOY@example.com',
             'username' => 'New_Creator',
             'password' => 'password',
+            'password_confirmation' => 'password',
         ]);
 
         $user = User::query()->where('username', 'new_creator')->firstOrFail();
 
         $response->assertRedirect(route('dashboard'));
         $this->assertAuthenticatedAs($user);
-        $this->assertSame('joy@example.com', $user->email);
         $this->assertTrue(Hash::check('password', $user->password));
+    }
+
+    public function test_registration_requires_matching_password_confirmation(): void
+    {
+        $response = $this->from(route('register'))->post(route('register.store'), [
+            'username' => 'New_Creator',
+            'password' => 'password',
+            'password_confirmation' => 'different-password',
+        ]);
+
+        $response->assertRedirect(route('register'));
+        $response->assertSessionHasErrors('password');
+        $this->assertGuest();
     }
 
     public function test_seeded_user_can_log_in_with_username_and_password(): void

@@ -22,7 +22,6 @@ class DatabaseSeeder extends Seeder
         User::query()->updateOrCreate([
             'username' => 'tnaflexer',
         ], [
-            'email' => 'tnaflexer@example.com',
             'password' => 'password',
         ]);
 
