@@ -10,22 +10,22 @@
 
     virtual_machines:
       - name: database-node
-        vcpus: 2
-        memory: 4096
+        vcpus: 1
+        memory: 1536
         disk: 10
         mac: "52:54:00:10:00:01"
         private_ip: "192.168.122.101"
 
       - name: webapp-node
         vcpus: 2
-        memory: 4096
+        memory: 2048
         disk: 10
         mac: "52:54:00:10:00:02"
         private_ip: "192.168.122.102"
 
       - name: video-preprocessor-node
         vcpus: 2
-        memory: 7168
+        memory: 2560
         disk: 20
         mac: "52:54:00:10:00:03"
         private_ip: "192.168.122.103"
