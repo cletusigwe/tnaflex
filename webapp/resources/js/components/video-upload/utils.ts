@@ -12,11 +12,15 @@ export function formatDuration(seconds: number): string {
 }
 
 export function currentStep(stage: PipelineStage): number {
-    if (stage === 'preprocessing' || stage === 'failed') {
+    if (
+        stage === 'preprocessing' ||
+        stage === 'publishing' ||
+        stage === 'failed'
+    ) {
         return 1;
     }
 
-    if (stage === 'review' || stage === 'publishing' || stage === 'published') {
+    if (stage === 'published') {
         return 2;
     }
 

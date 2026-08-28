@@ -1,14 +1,10 @@
 import { Head, Link } from '@inertiajs/react';
 
 import { VideoUploadControls } from '@/components/video-upload/controls';
-import {
-    PipelineNavigation,
-    PreviewNavigation,
-} from '@/components/video-upload/navigation';
+import { PipelineNavigation } from '@/components/video-upload/navigation';
 import { VideoUploadPreview } from '@/components/video-upload/preview';
 import { useVideoUpload } from '@/components/video-upload/use-video-upload';
 import { AppLayout } from '@/layouts/app-layout';
-import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 
 export default function CreateVideo() {
@@ -40,21 +36,7 @@ export default function CreateVideo() {
                 />
 
                 <form onSubmit={workflow.startUpload} className="mt-8">
-                    <div
-                        className={cn(
-                            'grid gap-8',
-                            workflow.isReviewStage
-                                ? 'xl:grid-cols-[10rem_minmax(0,1fr)_22rem]'
-                                : 'lg:grid-cols-[minmax(0,1fr)_23rem]',
-                        )}
-                    >
-                        {workflow.isReviewStage ? (
-                            <PreviewNavigation
-                                previewMode={workflow.previewMode}
-                                setPreviewMode={workflow.setPreviewMode}
-                            />
-                        ) : null}
-
+                    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_23rem]">
                         <VideoUploadPreview workflow={workflow} />
                         <VideoUploadControls workflow={workflow} />
                     </div>

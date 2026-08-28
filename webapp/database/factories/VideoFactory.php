@@ -30,6 +30,8 @@ class VideoFactory extends Factory
             'playback_path' => fn (array $attributes): string => 'videos/'.$attributes['slug'].'/hls/master.m3u8',
             'duration' => '04:18',
             'file_size_bytes' => fake()->numberBetween(4_000_000, 90_000_000),
+            'processing_progress' => 100,
+            'processing_stage' => 'Published',
             'published_at' => now(),
         ];
     }
@@ -43,6 +45,8 @@ class VideoFactory extends Factory
             'thumbnail_path' => null,
             'preview_path' => null,
             'playback_path' => null,
+            'processing_progress' => 5,
+            'processing_stage' => 'Queued for processing',
             'published_at' => null,
         ]);
     }
@@ -56,14 +60,16 @@ class VideoFactory extends Factory
             'thumbnail_path' => null,
             'preview_path' => null,
             'playback_path' => null,
+            'processing_progress' => 0,
+            'processing_stage' => 'Waiting for upload',
             'published_at' => null,
         ]);
     }
 
-    public function ready(): static
+    public function publishing(): static
     {
         return $this->state(fn (array $attributes): array => [
-            'status' => VideoStatus::Ready,
+            'status' => VideoStatus::Publishing,
             'source_path' => 'videos/'.$attributes['slug'].'/source/original.mp4',
             'source_mime_type' => 'video/mp4',
             'processed_path' => 'videos/'.$attributes['slug'].'/processed',
@@ -71,14 +77,9 @@ class VideoFactory extends Factory
             'thumbnail_path' => null,
             'preview_path' => null,
             'playback_path' => null,
+            'processing_progress' => 85,
+            'processing_stage' => 'Publishing video',
             'published_at' => null,
-        ]);
-    }
-
-    public function publishing(): static
-    {
-        return $this->ready()->state(fn (array $attributes): array => [
-            'status' => VideoStatus::Publishing,
         ]);
     }
 

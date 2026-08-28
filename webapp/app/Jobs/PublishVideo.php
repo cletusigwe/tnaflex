@@ -47,6 +47,11 @@ class PublishVideo implements ShouldBeUnique, ShouldQueue
             throw new RuntimeException('The processed video metadata is missing.');
         }
 
+        $this->video->update([
+            'processing_progress' => 88,
+            'processing_stage' => 'Copying playback files',
+        ]);
+
         $privateDisk = Storage::disk('r2_private');
         $publicDisk = Storage::disk((string) config('video.public_disk'));
         $publicPrefix = $this->video->storagePrefix();
@@ -91,10 +96,17 @@ class PublishVideo implements ShouldBeUnique, ShouldQueue
         }
 
         $this->video->update([
+            'processing_progress' => 96,
+            'processing_stage' => 'Finalizing publication',
+        ]);
+
+        $this->video->update([
             'thumbnail_path' => $publicPrefix.'/'.$thumbnailPath,
             'preview_path' => $publicPrefix.'/'.$previewPath,
             'playback_path' => $publicPrefix.'/'.$playlistPath,
             'status' => VideoStatus::Live,
+            'processing_progress' => 100,
+            'processing_stage' => 'Published',
             'processing_error' => null,
             'published_at' => now(),
         ]);
@@ -106,8 +118,9 @@ class PublishVideo implements ShouldBeUnique, ShouldQueue
 
         if ($this->video->status === VideoStatus::Publishing) {
             $this->video->update([
-                'status' => VideoStatus::Ready,
-                'processing_error' => 'Video publishing failed. Try publishing it again.',
+                'status' => VideoStatus::Failed,
+                'processing_stage' => 'Publishing failed',
+                'processing_error' => 'Video publishing failed.',
             ]);
         }
 

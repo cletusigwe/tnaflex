@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\PublishVideoRequest;
 use App\Http\Requests\StoreVideoRequest;
 use App\Jobs\ProcessVideo;
 use App\Jobs\PublishVideo;
@@ -10,16 +9,14 @@ use App\Models\Video;
 use App\VideoStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
-use JsonException;
 use RuntimeException;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DashboardVideoController extends Controller
 {
@@ -38,6 +35,7 @@ class DashboardVideoController extends Controller
             'description' => $validated['description'] ?? null,
             'source_mime_type' => $validated['content_type'],
             'file_size_bytes' => $validated['file_size_bytes'],
+            'processing_stage' => 'Waiting for upload',
         ]);
 
         $video->update([
@@ -116,88 +114,21 @@ class DashboardVideoController extends Controller
             ->where('status', VideoStatus::AwaitingUpload)
             ->update([
                 'status' => VideoStatus::Preprocessing,
+                'processing_progress' => 5,
+                'processing_stage' => 'Queued for processing',
                 'processing_error' => null,
             ]) === 1;
 
         $video->refresh();
 
         if ($wasQueued) {
-            ProcessVideo::dispatch($video)->afterCommit();
+            Bus::chain([
+                new ProcessVideo($video),
+                new PublishVideo($video),
+            ])->onConnection('video_processing')->dispatch();
         }
 
         return response()->json(['video' => $this->videoPayload($video)], 202);
-    }
-
-    public function publish(PublishVideoRequest $request, Video $video): JsonResponse
-    {
-        abort_unless($video->status === VideoStatus::Ready, 409, 'Only a processed video can be published.');
-
-        $manifest = $video->processing_manifest;
-
-        if ($manifest === null || $video->processed_path === null) {
-            throw new RuntimeException('The processed video metadata is missing.');
-        }
-
-        if ($request->hasFile('thumbnail')) {
-            $manifest = $this->storeCustomThumbnail(
-                $video,
-                $request->file('thumbnail'),
-                $manifest,
-            );
-        }
-
-        $wasQueued = Video::query()
-            ->whereKey($video->getKey())
-            ->where('status', VideoStatus::Ready)
-            ->update([
-                'status' => VideoStatus::Publishing,
-                'processing_manifest' => $manifest,
-                'processing_error' => null,
-            ]) === 1;
-
-        abort_unless($wasQueued, 409, 'This video is already being published.');
-
-        $video->refresh();
-        PublishVideo::dispatch($video)->afterCommit();
-
-        return response()->json(['video' => $this->videoPayload($video)], 202);
-    }
-
-    public function asset(Video $video, string $asset): StreamedResponse
-    {
-        Gate::authorize('view', $video);
-
-        abort_if(
-            $video->processed_path === null
-                || $asset === ''
-                || str_contains($asset, '..')
-                || str_contains($asset, '\\'),
-            404,
-        );
-
-        $path = $video->processed_path.'/'.ltrim($asset, '/');
-        $disk = Storage::disk('r2_private');
-
-        abort_unless($disk->exists($path), 404);
-
-        $stream = $disk->readStream($path);
-
-        if (! is_resource($stream)) {
-            throw new RuntimeException('The processed video asset could not be read.');
-        }
-
-        return response()->stream(function () use ($stream): void {
-            try {
-                fpassthru($stream);
-            } finally {
-                fclose($stream);
-            }
-        }, 200, [
-            'Cache-Control' => 'private, max-age=300',
-            'Content-Length' => (string) $disk->size($path),
-            'Content-Type' => $this->contentTypeFor($path),
-            'X-Content-Type-Options' => 'nosniff',
-        ]);
     }
 
     public function show(Request $request, Video $video): JsonResponse|Response
@@ -214,48 +145,11 @@ class DashboardVideoController extends Controller
     }
 
     /**
-     * @param  array<string, mixed>  $manifest
-     * @return array<string, mixed>
-     *
-     * @throws JsonException
-     */
-    private function storeCustomThumbnail(Video $video, ?UploadedFile $thumbnail, array $manifest): array
-    {
-        if ($thumbnail === null || $video->processed_path === null) {
-            return $manifest;
-        }
-
-        $filename = 'thumbnail-custom.'.$thumbnail->extension();
-        $path = $thumbnail->storeAs($video->processed_path, $filename, 'r2_private');
-
-        if ($path === false) {
-            throw new RuntimeException('The thumbnail could not be stored.');
-        }
-
-        $manifest['thumbnail'] = [
-            'path' => $filename,
-            'sizeBytes' => $thumbnail->getSize(),
-        ];
-
-        Storage::disk('r2_private')->put(
-            $video->processed_path.'/manifest.json',
-            json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
-            ['ContentType' => 'application/json'],
-        );
-
-        return $manifest;
-    }
-
-    /**
      * @return array<string, mixed>
      */
     private function videoPayload(Video $video): array
     {
         $manifest = $video->processing_manifest ?? [];
-        $thumbnailPath = data_get($manifest, 'thumbnail.path');
-        $previewPath = data_get($manifest, 'preview.path');
-        $playlistPath = data_get($manifest, 'playlist');
-
         $manifestRenditions = data_get($manifest, 'renditions', []);
         $renditions = [];
 
@@ -265,10 +159,8 @@ class DashboardVideoController extends Controller
                 $playlist = data_get($data, 'playlist');
                 $renditions[] = [
                     ...$data,
-                    'playlistUrl' => is_string($playlist)
-                        ? ($video->status === VideoStatus::Live
-                            ? $video->publicAssetUrl($video->storagePrefix().'/'.$playlist)
-                            : route('dashboard.videos.assets', ['video' => $video, 'asset' => $playlist]))
+                    'playlistUrl' => is_string($playlist) && $video->status === VideoStatus::Live
+                        ? $video->publicAssetUrl($video->storagePrefix().'/'.$playlist)
                         : null,
                 ];
             }
@@ -279,34 +171,16 @@ class DashboardVideoController extends Controller
             'title' => $video->title,
             'status' => $video->status->value,
             'statusLabel' => str($video->status->value)->headline()->toString(),
+            'processingProgress' => $video->processing_progress,
+            'processingStage' => $video->processing_stage,
             'processingError' => $video->processing_error,
             'fileSizeBytes' => $video->file_size_bytes,
             'durationSeconds' => data_get($manifest, 'durationSeconds'),
-            'thumbnailUrl' => $video->status !== VideoStatus::Live && is_string($thumbnailPath)
-                ? route('dashboard.videos.assets', ['video' => $video, 'asset' => $thumbnailPath])
-                : $video->thumbnailUrl(),
-            'previewUrl' => $video->status !== VideoStatus::Live && is_string($previewPath)
-                ? route('dashboard.videos.assets', ['video' => $video, 'asset' => $previewPath])
-                : $video->previewUrl(),
-            'playbackUrl' => $video->status !== VideoStatus::Live && is_string($playlistPath)
-                ? route('dashboard.videos.assets', ['video' => $video, 'asset' => $playlistPath])
-                : $video->playbackUrl(),
+            'thumbnailUrl' => $video->thumbnailUrl(),
+            'previewUrl' => $video->previewUrl(),
+            'playbackUrl' => $video->playbackUrl(),
             'renditions' => $renditions,
             'createdAt' => $video->created_at?->diffForHumans(),
         ];
-    }
-
-    private function contentTypeFor(string $path): string
-    {
-        return match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
-            'jpg', 'jpeg' => 'image/jpeg',
-            'json' => 'application/json',
-            'm3u8' => 'application/vnd.apple.mpegurl',
-            'mp4' => 'video/mp4',
-            'png' => 'image/png',
-            'ts' => 'video/mp2t',
-            'webp' => 'image/webp',
-            default => 'application/octet-stream',
-        };
     }
 }

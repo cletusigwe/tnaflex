@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils';
 
-import { pipelineSteps, previewModes } from './types';
-import type { PipelineStage, PreviewMode } from './types';
+import { pipelineSteps } from './types';
+import type { PipelineStage } from './types';
 
 type PipelineNavigationProps = {
     activeStep: number;
@@ -42,43 +42,6 @@ export function PipelineNavigation({
                     );
                 })}
             </ol>
-        </nav>
-    );
-}
-
-type PreviewNavigationProps = {
-    previewMode: PreviewMode;
-    setPreviewMode: (mode: PreviewMode) => void;
-};
-
-export function PreviewNavigation({
-    previewMode,
-    setPreviewMode,
-}: PreviewNavigationProps) {
-    return (
-        <nav
-            role="tablist"
-            aria-label="Publish previews"
-            className="grid grid-cols-3 border-y border-neutral-300 xl:block xl:border-y-0 xl:border-r xl:pr-6 dark:border-neutral-700"
-        >
-            {previewModes.map((mode, index) => (
-                <button
-                    key={mode.value}
-                    type="button"
-                    role="tab"
-                    aria-selected={previewMode === mode.value}
-                    onClick={() => setPreviewMode(mode.value)}
-                    className={cn(
-                        'flex min-h-14 w-full items-center px-3 py-3 text-left text-[10px] font-semibold tracking-[0.07em] uppercase hover:bg-neutral-200 xl:min-h-16 dark:hover:bg-neutral-800',
-                        index > 0 &&
-                            'border-l border-neutral-300 xl:border-t xl:border-l-0 dark:border-neutral-700',
-                        previewMode === mode.value &&
-                            'bg-[#0086d8] text-white hover:bg-[#0086d8] dark:hover:bg-[#0086d8]',
-                    )}
-                >
-                    {mode.label}
-                </button>
-            ))}
         </nav>
     );
 }

@@ -36,13 +36,6 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/dashboard/videos/{video}/complete', [DashboardVideoController::class, 'complete'])
         ->where('video', '[a-z0-9-]+')
         ->name('dashboard.videos.complete');
-    Route::post('/dashboard/videos/{video}/publish', [DashboardVideoController::class, 'publish'])
-        ->where('video', '[a-z0-9-]+')
-        ->name('dashboard.videos.publish');
-    Route::get('/dashboard/videos/{video}/assets/{asset}', [DashboardVideoController::class, 'asset'])
-        ->where('video', '[a-z0-9-]+')
-        ->where('asset', '.*')
-        ->name('dashboard.videos.assets');
     Route::get('/dashboard/videos/{video}', [DashboardVideoController::class, 'show'])
         ->where('video', '[a-z0-9-]+')
         ->name('dashboard.videos.show');

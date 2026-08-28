@@ -40,6 +40,8 @@ class VideoSeeder extends Seeder
                 'playback_path' => 'videos/dont-jerk-off-to-this/hls/master.m3u8',
                 'duration' => '04:21',
                 'file_size_bytes' => 43_989_497,
+                'processing_progress' => 100,
+                'processing_stage' => 'Published',
                 'published_at' => now()->subHours(2),
             ],
             [
@@ -52,6 +54,8 @@ class VideoSeeder extends Seeder
                 'playback_path' => 'videos/pranking-girlfriend/hls/master.m3u8',
                 'duration' => '02:02',
                 'file_size_bytes' => 21_241_247,
+                'processing_progress' => 100,
+                'processing_stage' => 'Published',
                 'published_at' => now()->subDay(),
             ],
             [
@@ -64,6 +68,8 @@ class VideoSeeder extends Seeder
                 'playback_path' => 'videos/matrix-red-dress/hls/master.m3u8',
                 'duration' => '03:01',
                 'file_size_bytes' => 52_924_269,
+                'processing_progress' => 100,
+                'processing_stage' => 'Published',
                 'published_at' => now()->subDays(2),
             ],
 
@@ -77,6 +83,8 @@ class VideoSeeder extends Seeder
                 'playback_path' => 'videos/sperm-racing/hls/master.m3u8',
                 'duration' => '00:55',
                 'file_size_bytes' => 9_223_333,
+                'processing_progress' => 100,
+                'processing_stage' => 'Published',
                 'published_at' => now()->subDays(3),
             ],
         ];

@@ -27,6 +27,8 @@ return new class extends Migration
             $table->string('playback_path')->nullable();
             $table->string('duration')->nullable();
             $table->unsignedBigInteger('file_size_bytes')->default(0);
+            $table->unsignedTinyInteger('processing_progress')->default(0);
+            $table->string('processing_stage')->nullable();
             $table->text('processing_error')->nullable();
             $table->timestamp('published_at')->nullable()->index();
             $table->timestamps();

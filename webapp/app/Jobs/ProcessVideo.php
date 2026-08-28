@@ -31,6 +31,7 @@ class ProcessVideo implements ShouldBeUnique, ShouldQueue
         $this->timeout = (int) config('video.processing_timeout');
         $this->uniqueFor = $this->timeout + 600;
         $this->onConnection('video_processing');
+        $this->afterCommit();
     }
 
     public function uniqueId(): string
@@ -49,13 +50,20 @@ class ProcessVideo implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $manifest = $processor->process($this->video);
+        $this->updateProgress(10, 'Downloading source');
+
+        $manifest = $processor->process(
+            $this->video,
+            fn (int $progress, string $stage) => $this->updateProgress($progress, $stage),
+        );
 
         $this->video->update([
             'processed_path' => $this->video->storagePrefix().'/processed',
             'processing_manifest' => $manifest,
             'duration' => $this->formatDuration((float) data_get($manifest, 'durationSeconds', 0)),
-            'status' => VideoStatus::Ready,
+            'status' => VideoStatus::Publishing,
+            'processing_progress' => 85,
+            'processing_stage' => 'Publishing video',
             'processing_error' => null,
         ]);
     }
@@ -67,6 +75,7 @@ class ProcessVideo implements ShouldBeUnique, ShouldQueue
         if ($this->video->status === VideoStatus::Preprocessing) {
             $this->video->update([
                 'status' => VideoStatus::Failed,
+                'processing_stage' => 'Processing failed',
                 'processing_error' => 'Video processing failed.',
             ]);
         }
@@ -82,5 +91,13 @@ class ProcessVideo implements ShouldBeUnique, ShouldQueue
         $seconds = max(0, (int) round($duration));
 
         return sprintf('%02d:%02d', intdiv($seconds, 60), $seconds % 60);
+    }
+
+    private function updateProgress(int $progress, string $stage): void
+    {
+        $this->video->update([
+            'processing_progress' => $progress,
+            'processing_stage' => $stage,
+        ]);
     }
 }

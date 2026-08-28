@@ -15,7 +15,6 @@ export function VideoStatusBadge({ status, label }: VideoStatusBadgeProps) {
                 status === 'awaiting_upload' &&
                     'bg-neutral-200 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300',
                 status === 'preprocessing' && 'bg-amber-100 text-amber-900',
-                status === 'ready' && 'bg-sky-100 text-sky-800',
                 status === 'publishing' && 'bg-violet-100 text-violet-800',
                 status === 'failed' && 'bg-red-100 text-red-800',
             )}

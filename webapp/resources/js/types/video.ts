@@ -13,12 +13,7 @@ export type Video = {
 };
 
 export type VideoStatus =
-    | 'awaiting_upload'
-    | 'preprocessing'
-    | 'ready'
-    | 'publishing'
-    | 'live'
-    | 'failed';
+    'awaiting_upload' | 'preprocessing' | 'publishing' | 'live' | 'failed';
 
 export type VideoRendition = {
     label: string;
@@ -43,6 +38,8 @@ export type UploadingVideo = Pick<
     DashboardVideo,
     'id' | 'title' | 'status' | 'statusLabel' | 'fileSizeBytes' | 'createdAt'
 > & {
+    processingProgress: number;
+    processingStage: string | null;
     processingError: string | null;
     durationSeconds: number | null;
     thumbnailUrl: string | null;

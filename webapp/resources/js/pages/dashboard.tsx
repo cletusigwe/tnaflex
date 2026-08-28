@@ -173,7 +173,7 @@ export default function Dashboard({ videos }: DashboardProps) {
                                 </p>
                                 <p className="mt-2 max-w-md text-sm leading-6 text-neutral-600 dark:text-neutral-400">
                                     {activeView === 'live'
-                                        ? 'Publish a processed video to make it available on your channel.'
+                                        ? 'Upload a video and it will appear here when processing finishes.'
                                         : 'Videos that are processing or need attention will appear here.'}
                                 </p>
                                 <Link

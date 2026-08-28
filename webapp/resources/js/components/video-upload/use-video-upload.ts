@@ -2,13 +2,12 @@ import { useHttp } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent, SyntheticEvent } from 'react';
 
-import { complete, publish, show, store } from '@/routes/dashboard/videos';
+import { complete, show, store } from '@/routes/dashboard/videos';
 import type { UploadingVideo } from '@/types';
 
 import type {
     CreateUploadResponse,
     PipelineStage,
-    PreviewMode,
     UploadPlan,
     UploadRequest,
     VideoMetadata,
@@ -18,20 +17,12 @@ import { contentTypeFor, currentStep, putFile } from './utils';
 
 export function useVideoUpload() {
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const thumbnailInputRef = useRef<HTMLInputElement>(null);
     const localPreviewUrlRef = useRef<string | null>(null);
-    const customThumbnailUrlRef = useRef<string | null>(null);
     const [videoFile, setVideoFile] = useState<File | null>(null);
     const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
     const [generatedThumbnailUrl, setGeneratedThumbnailUrl] = useState<
         string | null
     >(null);
-    const [customThumbnailUrl, setCustomThumbnailUrl] = useState<string | null>(
-        null,
-    );
-    const [thumbnailFileName, setThumbnailFileName] = useState<string | null>(
-        null,
-    );
     const [metadata, setMetadata] = useState<VideoMetadata | null>(null);
     const [stage, setStage] = useState<PipelineStage>('draft');
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -39,10 +30,6 @@ export function useVideoUpload() {
     const [pipelineError, setPipelineError] = useState<string | null>(null);
     const [uploadPlan, setUploadPlan] = useState<UploadPlan | null>(null);
     const [serverVideo, setServerVideo] = useState<UploadingVideo | null>(null);
-    const [previewMode, setPreviewMode] = useState<PreviewMode>('video');
-    const [selectedRendition, setSelectedRendition] = useState<string | null>(
-        null,
-    );
 
     const createUpload = useHttp<UploadRequest, CreateUploadResponse>({
         title: '',
@@ -52,31 +39,14 @@ export function useVideoUpload() {
         file_size_bytes: 0,
     });
     const completeUpload = useHttp<Record<string, never>, VideoResponse>({});
-    const publishVideo = useHttp<{ thumbnail: File | null }, VideoResponse>({
-        thumbnail: null,
-    });
-
     const activeStep = currentStep(stage);
-    const isReviewStage = activeStep === 2;
     const serverVideoId = serverVideo?.id;
-    const thumbnailUrl =
-        customThumbnailUrl ??
-        serverVideo?.thumbnailUrl ??
-        generatedThumbnailUrl;
-    const selectedRenditionData = serverVideo?.renditions.find(
-        (rendition) => rendition.label === selectedRendition,
-    );
-    const playbackUrl =
-        selectedRenditionData?.playlistUrl ?? serverVideo?.playbackUrl ?? null;
+    const thumbnailUrl = serverVideo?.thumbnailUrl ?? generatedThumbnailUrl;
 
     useEffect(() => {
         return () => {
             if (localPreviewUrlRef.current) {
                 URL.revokeObjectURL(localPreviewUrlRef.current);
-            }
-
-            if (customThumbnailUrlRef.current) {
-                URL.revokeObjectURL(customThumbnailUrlRef.current);
             }
         };
     }, []);
@@ -113,24 +83,14 @@ export function useVideoUpload() {
 
                 setServerVideo(payload.video);
 
-                if (payload.video.status === 'ready') {
-                    setStage('review');
-                    setPreviewMode('thumbnail');
-                    setSelectedRendition(
-                        payload.video.renditions.find(
-                            (rendition) => rendition.label === '720p',
-                        )?.label ??
-                            payload.video.renditions.at(-1)?.label ??
-                            null,
-                    );
-
-                    return;
-                }
-
                 if (payload.video.status === 'live') {
                     setStage('published');
 
                     return;
+                }
+
+                if (payload.video.status === 'publishing') {
+                    setStage('publishing');
                 }
 
                 if (payload.video.status === 'failed') {
@@ -186,8 +146,6 @@ export function useVideoUpload() {
         setServerVideo(null);
         setStage('draft');
         setUploadProgress(0);
-        setPreviewMode('video');
-        setSelectedRendition(null);
         createUpload.clearErrors();
         createUpload.setData((data) => ({
             ...data,
@@ -242,39 +200,6 @@ export function useVideoUpload() {
 
         if (!generatedThumbnailUrl && Number.isFinite(video.duration)) {
             video.currentTime = Math.min(1, video.duration / 10);
-        }
-    };
-
-    const selectThumbnail = (event: ChangeEvent<HTMLInputElement>) => {
-        const image = event.target.files?.[0] ?? null;
-
-        if (!image) {
-            return;
-        }
-
-        if (customThumbnailUrlRef.current) {
-            URL.revokeObjectURL(customThumbnailUrlRef.current);
-        }
-
-        const nextThumbnailUrl = URL.createObjectURL(image);
-        customThumbnailUrlRef.current = nextThumbnailUrl;
-        setCustomThumbnailUrl(nextThumbnailUrl);
-        setThumbnailFileName(image.name);
-        publishVideo.setData('thumbnail', image);
-    };
-
-    const resetThumbnail = () => {
-        if (customThumbnailUrlRef.current) {
-            URL.revokeObjectURL(customThumbnailUrlRef.current);
-            customThumbnailUrlRef.current = null;
-        }
-
-        setCustomThumbnailUrl(null);
-        setThumbnailFileName(null);
-        publishVideo.setData('thumbnail', null);
-
-        if (thumbnailInputRef.current) {
-            thumbnailInputRef.current.value = '';
         }
     };
 
@@ -350,29 +275,6 @@ export function useVideoUpload() {
         }
     };
 
-    const submitPublication = async () => {
-        if (!serverVideo || publishVideo.processing) {
-            return;
-        }
-
-        setPipelineError(null);
-
-        try {
-            const response = await publishVideo.post(
-                publish(serverVideo.id).url,
-            );
-
-            if (!response) {
-                return;
-            }
-
-            setServerVideo(response.video);
-            setStage('publishing');
-        } catch {
-            setPipelineError('The video could not be queued for publication.');
-        }
-    };
-
     const resetDraft = () => {
         if (localPreviewUrlRef.current) {
             URL.revokeObjectURL(localPreviewUrlRef.current);
@@ -382,7 +284,6 @@ export function useVideoUpload() {
         setVideoFile(null);
         setLocalPreviewUrl(null);
         setGeneratedThumbnailUrl(null);
-        resetThumbnail();
         setMetadata(null);
         setStage('draft');
         setPipelineError(null);
@@ -398,35 +299,22 @@ export function useVideoUpload() {
     return {
         activeStep,
         captureThumbnail,
-        customThumbnailUrl,
         description: createUpload.data.description,
         fileInputRef,
         isCreatingUpload: createUpload.processing,
-        isPublishing: publishVideo.processing,
-        isReviewStage,
         isTransferActive,
         localPreviewUrl,
         metadata,
         pipelineError,
-        playbackUrl,
-        previewMode,
         readMetadata,
         resetDraft,
-        resetThumbnail,
-        selectThumbnail,
         selectVideo,
-        selectedRendition,
         serverVideo,
         setDescription: (description: string) =>
             createUpload.setData('description', description),
-        setPreviewMode,
-        setSelectedRendition,
         setTitle: (title: string) => createUpload.setData('title', title),
         stage,
         startUpload,
-        submitPublication,
-        thumbnailFileName,
-        thumbnailInputRef,
         thumbnailUrl,
         title: createUpload.data.title,
         titleError: createUpload.errors.title

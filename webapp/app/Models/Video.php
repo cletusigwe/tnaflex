@@ -29,6 +29,8 @@ use Illuminate\Support\Facades\Storage;
  * @property string|null $playback_path
  * @property string|null $duration
  * @property int $file_size_bytes
+ * @property int $processing_progress
+ * @property string|null $processing_stage
  * @property string|null $processing_error
  * @property Carbon|null $published_at
  * @property Carbon|null $created_at
@@ -50,6 +52,8 @@ use Illuminate\Support\Facades\Storage;
     'playback_path',
     'duration',
     'file_size_bytes',
+    'processing_progress',
+    'processing_stage',
     'processing_error',
     'published_at',
 ])]
@@ -64,6 +68,7 @@ class Video extends Model
     protected $attributes = [
         'status' => VideoStatus::AwaitingUpload->value,
         'file_size_bytes' => 0,
+        'processing_progress' => 0,
     ];
 
     public function getRouteKeyName(): string
@@ -118,6 +123,7 @@ class Video extends Model
             'processing_manifest' => 'array',
             'status' => VideoStatus::class,
             'file_size_bytes' => 'integer',
+            'processing_progress' => 'integer',
         ];
     }
 

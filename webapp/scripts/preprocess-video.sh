@@ -66,6 +66,10 @@ log() {
     printf '[video-preprocessor] %s\n' "$*"
 }
 
+progress() {
+    printf '[video-preprocessor] progress:%s:%s\n' "$1" "$2"
+}
+
 fail() {
     printf '[video-preprocessor] Error: %s\n' "$*" >&2
     exit 1
@@ -358,6 +362,7 @@ preview_start_three="$(calculate_time "${duration}" 0.75 "${preview_clip_duratio
 
 log "Processing ${source_width}x${source_height}, ${output_fps} fps, ${duration}s."
 log 'Generating thumbnail and watermarked hover preview.'
+progress 20 'Generating thumbnail and hover preview'
 
 ffmpeg -hide_banner -loglevel error -y \
     -ss "${thumbnail_time}" \
@@ -408,6 +413,13 @@ for rendition in "${RENDITIONS[@]}"; do
     watermark_margin="$(watermark_margin_for "${HEIGHTS[${rendition}]}")"
 
     log "Encoding watermarked ${rendition}."
+
+    case "${rendition}" in
+        240p) progress 30 'Encoding 240p' ;;
+        360p) progress 42 'Encoding 360p' ;;
+        720p) progress 54 'Encoding 720p' ;;
+        1080p) progress 66 'Encoding 1080p' ;;
+    esac
 
     encode_command=(
         ffmpeg -hide_banner -loglevel error -y
@@ -477,5 +489,6 @@ write_manifest \
     "${produced_renditions[@]}"
 
 log 'Validating generated assets.'
+progress 75 'Validating playback files'
 validate_outputs "${produced_renditions[@]}"
 log "Processing complete: ${output_dir}"

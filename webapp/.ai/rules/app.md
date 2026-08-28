@@ -16,3 +16,6 @@ Video media database columns contain storage-relative paths under videos/{immuta
 
 ## Use the existing public disk for local video delivery
 The local_media disk does not exist. video.public_disk is public in local/testing and r2_public in production; storage-relative video paths resolve through that configured disk. Seed media lives under storage/app/public/videos and is served through public/storage.
+
+## Automatically publish processed videos
+Supersedes the earlier approval-gated publishing rule. Uploads and processed assets remain private while processing; ProcessVideo and PublishVideo run as one automatic queue chain, and only PublishVideo may copy assets to the configured public disk and set Live/published_at after every copy succeeds.

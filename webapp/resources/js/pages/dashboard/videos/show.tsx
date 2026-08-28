@@ -1,13 +1,11 @@
-import { Head, Link, router, useHttp, usePoll } from '@inertiajs/react';
+import { Head, Link, usePoll } from '@inertiajs/react';
 import { useEffect } from 'react';
 
-import { Button } from '@/components/ui/button';
 import { VideoStatusBadge } from '@/components/video-status';
 import { AppLayout } from '@/layouts/app-layout';
 import { formatFileSize } from '@/lib/format-file-size';
 import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
-import { publish } from '@/routes/dashboard/videos';
 import { show as showVideo } from '@/routes/videos';
 import type { UploadingVideo, VideoStatus } from '@/types';
 
@@ -29,8 +27,7 @@ function stepState(status: VideoStatus, step: number): StepState {
     const currentStep = {
         awaiting_upload: 0,
         preprocessing: 1,
-        ready: 2,
-        publishing: 2,
+        publishing: 1,
         live: 3,
     }[status];
 
@@ -50,14 +47,8 @@ export default function ShowUploadingVideo({ video }: ShowUploadingVideoProps) {
     const { start, stop } = usePoll(
         2000,
         { only: ['video'] },
-        { autoStart: shouldPoll },
+        { autoStart: shouldPoll, mode: 'rest' },
     );
-    const publication = useHttp<
-        Record<string, never>,
-        {
-            video: UploadingVideo;
-        }
-    >({});
 
     useEffect(() => {
         if (shouldPoll) {
@@ -67,16 +58,7 @@ export default function ShowUploadingVideo({ video }: ShowUploadingVideoProps) {
         }
     }, [shouldPoll, start, stop]);
 
-    const queuePublication = async () => {
-        const response = await publication.post(publish(video.id).url);
-
-        if (response) {
-            start();
-            router.reload({ only: ['video'] });
-        }
-    };
-
-    const steps = ['Upload', 'Preprocess', 'Publish'];
+    const steps = ['Upload', 'Process', 'Live'];
 
     return (
         <AppLayout>
@@ -144,9 +126,9 @@ export default function ShowUploadingVideo({ video }: ShowUploadingVideoProps) {
                                     {index === 0 &&
                                         'The original is stored privately.'}
                                     {index === 1 &&
-                                        'Playback files and previews are generated.'}
+                                        'Playback files and previews are generated and published.'}
                                     {index === 2 &&
-                                        'Approved assets move to public storage.'}
+                                        'The finished video appears on your channel.'}
                                 </p>
                             </li>
                         );
@@ -154,17 +136,27 @@ export default function ShowUploadingVideo({ video }: ShowUploadingVideoProps) {
                 </ol>
 
                 {shouldPoll ? (
-                    <p
-                        className="mt-8 border-l-2 border-[#0086d8] py-1 pl-4 text-sm leading-6 text-neutral-600 dark:text-neutral-400"
-                        aria-live="polite"
-                    >
-                        {video.status === 'publishing'
-                            ? 'The approved assets are moving to public storage.'
-                            : video.status === 'awaiting_upload'
-                              ? 'Waiting for the direct upload to finish.'
-                              : 'The video is being compressed and watermarked.'}{' '}
-                        This page updates automatically.
-                    </p>
+                    <div className="mt-8" aria-live="polite">
+                        <div className="mb-2 flex items-center justify-between gap-4 text-sm font-medium">
+                            <span>
+                                {video.processingStage ?? 'Preparing video'}
+                            </span>
+                            <span className="tabular-nums">
+                                {video.processingProgress}%
+                            </span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden bg-neutral-300 dark:bg-neutral-700">
+                            <div
+                                className="h-full bg-[#0086d8] transition-[width] duration-500"
+                                style={{
+                                    width: `${video.processingProgress}%`,
+                                }}
+                            />
+                        </div>
+                        <p className="mt-3 text-xs text-neutral-500">
+                            This page updates automatically.
+                        </p>
+                    </div>
                 ) : null}
 
                 {video.status === 'failed' ? (
@@ -177,59 +169,6 @@ export default function ShowUploadingVideo({ video }: ShowUploadingVideoProps) {
                                 'The video could not be processed.'}
                         </p>
                     </div>
-                ) : null}
-
-                {video.status === 'ready' ? (
-                    <section className="mt-10 grid gap-8 md:grid-cols-[minmax(0,1fr)_16rem]">
-                        <div className="aspect-video overflow-hidden bg-neutral-200 dark:bg-neutral-800">
-                            {video.thumbnailUrl ? (
-                                <img
-                                    src={video.thumbnailUrl}
-                                    alt={`Thumbnail for ${video.title}`}
-                                    className="h-full w-full object-cover"
-                                />
-                            ) : null}
-                        </div>
-
-                        <div>
-                            <p className="text-[10px] font-semibold tracking-[0.18em] text-[#0086d8] uppercase">
-                                Ready to publish
-                            </p>
-                            <h2 className="mt-2 text-2xl font-semibold tracking-[-0.035em]">
-                                Review complete
-                            </h2>
-                            <div className="mt-5 divide-y divide-neutral-300 text-xs dark:divide-neutral-700">
-                                {video.renditions.map((rendition) => (
-                                    <div
-                                        key={rendition.label}
-                                        className="flex items-center justify-between gap-4 py-2.5"
-                                    >
-                                        <span className="font-semibold">
-                                            {rendition.label}
-                                        </span>
-                                        <span className="text-neutral-500 tabular-nums">
-                                            {formatFileSize(
-                                                rendition.sizeBytes,
-                                            )}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                            {video.processingError ? (
-                                <p className="mt-5 text-xs leading-5 text-red-700 dark:text-red-300">
-                                    {video.processingError}
-                                </p>
-                            ) : null}
-                            <Button
-                                type="button"
-                                onClick={queuePublication}
-                                disabled={publication.processing}
-                                className="mt-6 w-full"
-                            >
-                                Publish video
-                            </Button>
-                        </div>
-                    </section>
                 ) : null}
 
                 {video.status === 'live' ? (

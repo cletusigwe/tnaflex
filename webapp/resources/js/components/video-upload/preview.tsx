@@ -1,7 +1,5 @@
-import { VideoPlayer } from '@/components/video-player';
 import { formatFileSize } from '@/lib/format-file-size';
 
-import { previewModes } from './types';
 import type { VideoUploadWorkflow } from './use-video-upload';
 import { formatDuration } from './utils';
 
@@ -13,37 +11,24 @@ export function VideoUploadPreview({ workflow }: VideoUploadPreviewProps) {
     const {
         captureThumbnail,
         fileInputRef,
-        isReviewStage,
         localPreviewUrl,
         metadata,
-        playbackUrl,
-        previewMode,
         readMetadata,
         selectVideo,
-        selectedRendition,
-        serverVideo,
         stage,
         thumbnailUrl,
-        title,
         videoFile,
     } = workflow;
-    const previewLabel = previewModes.find(
-        (mode) => mode.value === previewMode,
-    )?.label;
 
     return (
         <section className="min-w-0">
             <div className="mb-3">
                 <h2 className="text-xs font-semibold tracking-[0.1em] uppercase">
-                    {isReviewStage ? previewLabel : 'Video preview'}
+                    Video preview
                 </h2>
                 {videoFile ? (
                     <p className="mt-1 text-xs text-neutral-500">
-                        {previewMode === 'video'
-                            ? (selectedRendition ?? 'Source video')
-                            : previewMode === 'thumbnail'
-                              ? '16:9 cover image'
-                              : 'Automatic short loop'}
+                        Source video
                     </p>
                 ) : null}
             </div>
@@ -62,73 +47,27 @@ export function VideoUploadPreview({ workflow }: VideoUploadPreviewProps) {
                 </label>
             ) : null}
 
-            {videoFile && previewMode === 'video' ? (
-                playbackUrl && isReviewStage ? (
-                    <VideoPlayer
-                        key={playbackUrl}
-                        src={playbackUrl}
-                        poster={thumbnailUrl}
-                        title={title}
+            {videoFile ? (
+                <div className="overflow-hidden bg-black">
+                    <video
+                        src={localPreviewUrl ?? undefined}
+                        controls
+                        playsInline
+                        preload="metadata"
+                        onLoadedMetadata={readMetadata}
+                        onLoadedData={(event) => {
+                            if (!thumbnailUrl) {
+                                captureThumbnail(event.currentTarget);
+                            }
+                        }}
+                        onSeeked={(event) => {
+                            if (!thumbnailUrl) {
+                                captureThumbnail(event.currentTarget);
+                            }
+                        }}
+                        className="aspect-video h-auto w-full bg-black object-contain"
                     />
-                ) : (
-                    <div className="overflow-hidden bg-black">
-                        <video
-                            src={localPreviewUrl ?? undefined}
-                            controls
-                            playsInline
-                            preload="metadata"
-                            onLoadedMetadata={readMetadata}
-                            onLoadedData={(event) => {
-                                if (!thumbnailUrl) {
-                                    captureThumbnail(event.currentTarget);
-                                }
-                            }}
-                            onSeeked={(event) => {
-                                if (!thumbnailUrl) {
-                                    captureThumbnail(event.currentTarget);
-                                }
-                            }}
-                            className="aspect-video h-auto w-full bg-black object-contain"
-                        />
-                    </div>
-                )
-            ) : null}
-
-            {videoFile && previewMode === 'thumbnail' ? (
-                thumbnailUrl ? (
-                    <div className="aspect-video overflow-hidden bg-black">
-                        <img
-                            src={thumbnailUrl}
-                            alt={`Thumbnail for ${title}`}
-                            className="h-full w-full object-cover"
-                        />
-                    </div>
-                ) : (
-                    <PreviewPlaceholder>
-                        Preparing thumbnail…
-                    </PreviewPlaceholder>
-                )
-            ) : null}
-
-            {videoFile && previewMode === 'hover' ? (
-                serverVideo?.previewUrl ? (
-                    <div className="aspect-video overflow-hidden bg-black">
-                        <video
-                            src={serverVideo.previewUrl}
-                            poster={thumbnailUrl ?? undefined}
-                            autoPlay
-                            muted
-                            loop
-                            playsInline
-                            preload="auto"
-                            className="h-full w-full object-cover"
-                        />
-                    </div>
-                ) : (
-                    <PreviewPlaceholder>
-                        Preparing hover preview…
-                    </PreviewPlaceholder>
-                )
+                </div>
             ) : null}
 
             <input
@@ -142,7 +81,7 @@ export function VideoUploadPreview({ workflow }: VideoUploadPreviewProps) {
                 className="sr-only"
             />
 
-            {videoFile && !isReviewStage ? (
+            {videoFile ? (
                 <div className="grid gap-3 border-b border-neutral-300 py-3 text-xs sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] dark:border-neutral-700">
                     <p className="truncate font-semibold">{videoFile.name}</p>
                     <p className="text-neutral-500 tabular-nums">
@@ -168,13 +107,5 @@ export function VideoUploadPreview({ workflow }: VideoUploadPreviewProps) {
                 </label>
             ) : null}
         </section>
-    );
-}
-
-function PreviewPlaceholder({ children }: { children: string }) {
-    return (
-        <div className="flex aspect-video items-center justify-center bg-neutral-200 text-sm font-medium text-neutral-500 dark:bg-neutral-800">
-            {children}
-        </div>
     );
 }

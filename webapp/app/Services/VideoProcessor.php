@@ -3,12 +3,14 @@
 namespace App\Services;
 
 use App\Models\Video;
+use Closure;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use JsonException;
 use RuntimeException;
+use Symfony\Component\Process\Process as SymfonyProcess;
 
 class VideoProcessor
 {
@@ -17,7 +19,7 @@ class VideoProcessor
      *
      * @throws JsonException
      */
-    public function process(Video $video): array
+    public function process(Video $video, ?Closure $onProgress = null): array
     {
         if ($video->source_path === null) {
             throw new RuntimeException('The video has no source path.');
@@ -32,6 +34,9 @@ class VideoProcessor
 
         try {
             $this->downloadSource($video->source_path, $sourcePath);
+            $onProgress?->__invoke(15, 'Inspecting source');
+
+            $outputBuffer = '';
 
             Process::timeout(max(60, (int) config('video.processing_timeout') - 60))
                 ->run([
@@ -42,10 +47,27 @@ class VideoProcessor
                     $outputPath,
                     '--watermark',
                     resource_path('media/watermarks/tnaflex.png'),
-                ])
+                ], function (string $type, string $output) use (&$outputBuffer, $onProgress): void {
+                    if ($type !== SymfonyProcess::OUT || $onProgress === null) {
+                        return;
+                    }
+
+                    $outputBuffer .= $output;
+
+                    while (($lineEnd = strpos($outputBuffer, "\n")) !== false) {
+                        $line = substr($outputBuffer, 0, $lineEnd);
+                        $outputBuffer = substr($outputBuffer, $lineEnd + 1);
+                        $this->reportProgress($line, $onProgress);
+                    }
+                })
                 ->throw();
 
+            if ($outputBuffer !== '' && $onProgress !== null) {
+                $this->reportProgress($outputBuffer, $onProgress);
+            }
+
             $manifest = $this->readManifest($outputPath);
+            $onProgress?->__invoke(80, 'Uploading processed files');
             $this->uploadOutputs($outputPath, $video->storagePrefix().'/processed');
 
             return $manifest;
@@ -54,6 +76,15 @@ class VideoProcessor
                 File::deleteDirectory($workingDirectory);
             }
         }
+    }
+
+    private function reportProgress(string $line, Closure $onProgress): void
+    {
+        if (preg_match('/^\[video-preprocessor\] progress:(\d+):(.+)$/', trim($line), $matches) !== 1) {
+            return;
+        }
+
+        $onProgress((int) $matches[1], trim($matches[2]));
     }
 
     private function downloadSource(string $remotePath, string $localPath): void

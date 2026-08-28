@@ -4,12 +4,9 @@ export type PipelineStage =
     | 'draft'
     | 'uploading'
     | 'preprocessing'
-    | 'review'
     | 'publishing'
     | 'published'
     | 'failed';
-
-export type PreviewMode = 'video' | 'thumbnail' | 'hover';
 
 export type VideoMetadata = {
     duration: number;
@@ -39,10 +36,4 @@ export type CreateUploadResponse = VideoResponse & {
     upload: UploadPlan;
 };
 
-export const pipelineSteps = ['Upload', 'Preprocess', 'Publish'];
-
-export const previewModes: { label: string; value: PreviewMode }[] = [
-    { label: 'Video', value: 'video' },
-    { label: 'Thumbnail', value: 'thumbnail' },
-    { label: 'Hover preview', value: 'hover' },
-];
+export const pipelineSteps = ['Upload', 'Process', 'Live'];

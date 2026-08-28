@@ -8,8 +8,9 @@ use App\Models\User;
 use App\Models\Video;
 use App\Services\VideoProcessor;
 use App\VideoStatus;
+use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
@@ -23,7 +24,7 @@ class VideoUploadTest extends TestCase
     public function test_authenticated_user_can_create_and_complete_a_direct_upload(): void
     {
         Storage::fake('r2_private');
-        Queue::fake();
+        Bus::fake();
 
         $user = User::factory()->create();
         $fileContents = str_repeat('v', 2048);
@@ -42,25 +43,27 @@ class VideoUploadTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('video.id', $video->slug)
             ->assertJsonPath('video.status', VideoStatus::AwaitingUpload->value)
+            ->assertJsonPath('video.processingProgress', 0)
+            ->assertJsonPath('video.processingStage', 'Waiting for upload')
             ->assertJsonStructure(['upload' => ['url', 'headers', 'expiresAt']]);
         $this->assertTrue($video->user->is($user));
         $this->assertSame('videos/'.$video->slug.'/source/original.mp4', $video->source_path);
         $this->assertSame('video/mp4', $video->source_mime_type);
-        Queue::assertNothingPushed();
+        Bus::assertNothingDispatched();
 
         Storage::disk('r2_private')->put($video->source_path, $fileContents);
 
         $this->actingAs($user)
             ->postJson(route('dashboard.videos.complete', $video))
             ->assertAccepted()
-            ->assertJsonPath('video.status', VideoStatus::Preprocessing->value);
+            ->assertJsonPath('video.status', VideoStatus::Preprocessing->value)
+            ->assertJsonPath('video.processingProgress', 5)
+            ->assertJsonPath('video.processingStage', 'Queued for processing');
 
         $video->refresh();
 
         $this->assertSame(VideoStatus::Preprocessing, $video->status);
-        Queue::assertPushed(ProcessVideo::class, function (ProcessVideo $job) use ($video): bool {
-            return $job->video->is($video) && $job->connection === 'video_processing';
-        });
+        Bus::assertChained([ProcessVideo::class, PublishVideo::class]);
     }
 
     public function test_direct_upload_requires_supported_metadata(): void
@@ -127,20 +130,29 @@ class VideoUploadTest extends TestCase
         Queue::assertNothingPushed();
     }
 
-    public function test_processing_job_marks_video_ready_with_its_manifest(): void
+    public function test_processing_job_prepares_video_for_automatic_publication(): void
     {
         $video = Video::factory()->preprocessing()->create();
         $manifest = $this->processingManifest();
         $processor = Mockery::mock(VideoProcessor::class);
         $processor->shouldReceive('process')
             ->once()
-            ->with(Mockery::on(fn (Video $candidate): bool => $candidate->is($video)))
-            ->andReturn($manifest);
+            ->with(
+                Mockery::on(fn (Video $candidate): bool => $candidate->is($video)),
+                Mockery::type(Closure::class),
+            )
+            ->andReturnUsing(function (Video $video, Closure $onProgress) use ($manifest): array {
+                $onProgress(54, 'Encoding 720p');
+
+                return $manifest;
+            });
 
         (new ProcessVideo($video))->handle($processor);
         $video->refresh();
 
-        $this->assertSame(VideoStatus::Ready, $video->status);
+        $this->assertSame(VideoStatus::Publishing, $video->status);
+        $this->assertSame(85, $video->processing_progress);
+        $this->assertSame('Publishing video', $video->processing_stage);
         $this->assertSame('videos/'.$video->slug.'/processed', $video->processed_path);
         $this->assertSame($manifest, $video->processing_manifest);
         $this->assertSame('01:02', $video->duration);
@@ -155,49 +167,33 @@ class VideoUploadTest extends TestCase
         $video->refresh();
 
         $this->assertSame(VideoStatus::Failed, $video->status);
+        $this->assertSame('Processing failed', $video->processing_stage);
         $this->assertSame('Video processing failed.', $video->processing_error);
     }
 
-    public function test_owner_can_approve_a_ready_video_for_publication(): void
+    public function test_manual_publish_endpoint_is_not_exposed(): void
     {
-        Storage::fake('r2_private');
-        Queue::fake();
-
         $user = User::factory()->create();
-        $video = Video::factory()->for($user)->ready()->create();
+        $video = Video::factory()->for($user)->publishing()->create();
 
         $this->actingAs($user)
-            ->postJson(route('dashboard.videos.publish', $video))
-            ->assertAccepted()
-            ->assertJsonPath('video.status', VideoStatus::Publishing->value);
-
-        $this->assertSame(VideoStatus::Publishing, $video->refresh()->status);
-        Queue::assertPushed(PublishVideo::class, function (PublishVideo $job) use ($video): bool {
-            return $job->video->is($video) && $job->connection === 'video_processing';
-        });
+            ->postJson('/dashboard/videos/'.$video->slug.'/publish')
+            ->assertNotFound();
     }
 
-    public function test_owner_can_replace_the_generated_thumbnail_when_publishing(): void
+    public function test_owner_can_poll_persisted_processing_progress(): void
     {
-        Storage::fake('r2_private');
-        Queue::fake();
-
         $user = User::factory()->create();
-        $video = Video::factory()->for($user)->ready()->create();
+        $video = Video::factory()->for($user)->preprocessing()->create([
+            'processing_progress' => 54,
+            'processing_stage' => 'Encoding 720p',
+        ]);
 
         $this->actingAs($user)
-            ->post(route('dashboard.videos.publish', $video), [
-                'thumbnail' => UploadedFile::fake()->image('cover.jpg', 1280, 720),
-            ], ['Accept' => 'application/json'])
-            ->assertAccepted();
-
-        Storage::disk('r2_private')->assertExists($video->processed_path.'/thumbnail-custom.jpg');
-        Storage::disk('r2_private')->assertExists($video->processed_path.'/manifest.json');
-        $this->assertSame(
-            'thumbnail-custom.jpg',
-            data_get($video->refresh()->processing_manifest, 'thumbnail.path'),
-        );
-        Queue::assertPushed(PublishVideo::class);
+            ->getJson(route('dashboard.videos.show', $video))
+            ->assertOk()
+            ->assertJsonPath('video.processingProgress', 54)
+            ->assertJsonPath('video.processingStage', 'Encoding 720p');
     }
 
     public function test_publication_job_copies_processed_assets_and_marks_video_live(): void
@@ -228,30 +224,22 @@ class VideoUploadTest extends TestCase
         }
 
         $this->assertSame(VideoStatus::Live, $video->status);
+        $this->assertSame(100, $video->processing_progress);
+        $this->assertSame('Published', $video->processing_stage);
         $this->assertNotNull($video->published_at);
         $this->assertSame('videos/'.$video->slug.'/thumbnail.jpg', $video->thumbnail_path);
         $this->assertSame('videos/'.$video->slug.'/preview.mp4', $video->preview_path);
         $this->assertSame('videos/'.$video->slug.'/hls/master.m3u8', $video->playback_path);
     }
 
-    public function test_private_processed_assets_are_owner_only(): void
+    public function test_private_processed_assets_are_not_exposed_over_http(): void
     {
-        Storage::fake('r2_private');
-
         $owner = User::factory()->create();
-        $otherUser = User::factory()->create();
-        $video = Video::factory()->for($owner)->ready()->create();
-        Storage::disk('r2_private')->put($video->processed_path.'/hls/master.m3u8', '#EXTM3U');
-        $route = route('dashboard.videos.assets', [
-            'video' => $video,
-            'asset' => 'hls/master.m3u8',
-        ]);
+        $video = Video::factory()->for($owner)->publishing()->create();
 
         $this->actingAs($owner)
-            ->get($route)
-            ->assertOk()
-            ->assertHeader('Content-Type', 'application/vnd.apple.mpegurl');
-        $this->actingAs($otherUser)->get($route)->assertForbidden();
+            ->get('/dashboard/videos/'.$video->slug.'/assets/hls/master.m3u8')
+            ->assertNotFound();
     }
 
     /**
