@@ -97,3 +97,14 @@
       loop: "{{ virtual_machines }}"
       loop_control:
         label: "{{ item.name }}"
+
+    - name: Wait for SSH on each virtual machine
+      ansible.builtin.wait_for:
+        host: "{{ item.private_ip }}"
+        port: 22
+        state: started
+        connect_timeout: 5
+        timeout: 300
+      loop: "{{ virtual_machines }}"
+      loop_control:
+        label: "{{ item.name }}"
